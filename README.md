@@ -1,73 +1,92 @@
-# Welcome to your Lovable project
+# ExoDiscover
 
-## Project info
+Exoplanet classification system using machine learning on NASA Kepler mission data.
 
-**URL**: https://lovable.dev/projects/8dbeda92-2296-4769-b743-86e4dc732f87
+## Demo
 
-## How can I edit this code?
+### Option 1: Run the Website Locally
 
-There are several ways of editing your application.
+This starts the Flask backend + the Vite frontend.
 
-**Use Lovable**
+**Backend setup:**
+```bash
+cd exodiscover-backend
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+pip install -r requirements.txt
+```
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/8dbeda92-2296-4769-b743-86e4dc732f87) and start prompting.
+**Start the API:**
+```bash
+python app.py
+```
 
-Changes made via Lovable will be committed automatically to this repo.
-
-**Use your preferred IDE**
-
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
-
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
-
-Follow these steps:
-
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
-
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
+**Start the frontend (in a second terminal):**
+```bash
+npm install
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+Open the app using the given localhost server.
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+### Option 2: Run Predictions via Script
 
-**Use GitHub Codespaces**
+This runs a script-driven predictor and does not use the web app.
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+Ensure the Python environment is ready (same as Option 1), then run:
+```bash
+python exodiscover-backend/predict.py
+```
 
-## What technologies are used for this project?
+## ML Component
 
-This project is built with:
+**Data source:** NASA Kepler Objects of Interest (KOI) catalog
 
-- Vite
-- TypeScript
+**Features extracted from light curves:**
+- Statistical: mean, std, median, max, min, range, coefficient of variation
+- Transit detection: num_dips, dip_fraction, max_dip_depth, transit_count
+- Signal analysis: skewness, kurtosis, SNR, smoothness
+- Periodicity: num_periods, primary_period
+
+**Target labels:**
+- Confirmed (verified exoplanet)
+- Candidate (potential exoplanet)
+- False Positive (not an exoplanet)
+
+**Models implemented using scikit-learn and XGBoost:**
+- XGBoost Classifier (production)
+- CNN for light curve analysis
+- LSTM for sequential data
+
+**Training and evaluation:**
+```bash
+python exodiscover-backend/train_final_model.py
+python exodiscover-backend/predict.py
+```
+
+**Evaluation metrics:**
+- Accuracy on holdout test set
+- Classification report (precision, recall, F1)
+- Confusion matrix
+
+## Tech Stack
+
+**Frontend:**
 - React
-- shadcn-ui
+- TypeScript
+- Vite
 - Tailwind CSS
+- shadcn-ui
 
-## How can I deploy this project?
+**Backend:**
+- Flask
+- XGBoost
+- scikit-learn
+- TensorFlow/Keras
+- lightkurve (NASA light curve analysis)
 
-Simply open [Lovable](https://lovable.dev/projects/8dbeda92-2296-4769-b743-86e4dc732f87) and click on Share -> Publish.
+## Data Sources
 
-## Can I connect a custom domain to my Lovable project?
-
-Yes, you can!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+- NASA Exoplanet Archive
+- Kepler Objects of Interest (KOI) catalog
+- Kepler, K2, and TESS mission data
