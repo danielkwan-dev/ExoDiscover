@@ -46,3 +46,18 @@ Thumbs.db
 # Temporary files
 *.log
 *.tmp
+
+# ExoDiscover: data, artifacts, and caches
+data/
+artifacts/
+*.npy
+*.pkl
+*.joblib
+!models/production/*.joblib
+.venv/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+train_full.log
+train_full.err
+*.egg-info/
