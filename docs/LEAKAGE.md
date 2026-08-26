@@ -93,11 +93,12 @@ locks the decision in.
 
 ## 4. Why 0.98 is real here, not a fourth leak
 
-The clean, grouped model scores 0.9844 ROC-AUC. That is high enough to be
+The clean, grouped model scores 0.9827 ROC-AUC. That is high enough to be
 suspicious, so it was checked rather than reported.
 
-`log_prad` (planet radius) dominates the SHAP ranking at 1.50 mean abs — more
-than double the next feature. It turns out to be genuine physics:
+`log_prad` (planet radius) dominates the SHAP ranking at 1.63 mean abs — roughly
+double the next feature (`koi_model_snr`, 0.86). It turns out to be genuine
+physics:
 
 | Disposition | median radius | 90th pct | max |
 |---|---|---|---|
@@ -190,6 +191,45 @@ is much less flattering than 0.98. It is reported first in the model card for
 that reason.
 
 ---
+
+## 8. How certain are these numbers?
+
+Every comparison above is between figures with real uncertainty, so the
+uncertainty is measured rather than left implicit.
+
+**Fold-to-fold spread** accompanies each cross-validated score. The five boosted
+families span 0.0035 PR-AUC while their individual standard deviations run
+0.0048–0.0069 — the ordering among them carries no information. Optuna's 25-trial
+search moved the winner a further 0.0011, also inside the band.
+
+**Confidence intervals** on the held-out metrics come from a bootstrap that
+resamples **host stars, not rows**, for the same reason the splits are grouped:
+sibling KOIs share stellar parameters and are not independent draws, so a row
+bootstrap reports an interval narrower than the data supports.
+
+| Metric | Value | 95% CI |
+|---|---|---|
+| ROC-AUC | 0.9827 | 0.9764 – 0.9881 |
+| PR-AUC | 0.9699 | 0.9581 – 0.9793 |
+
+**Calibration involved a real trade**, not a default. Isotonic and sigmoid were
+both fitted and scored on a third, star-disjoint slice:
+
+| Method | Brier | Distinct probabilities (n = 1,483) |
+|---|---|---|
+| Isotonic (selected) | 0.0537 | 42 |
+| Sigmoid | 0.0570 | 1,483 |
+
+Isotonic calibrates better; sigmoid never ties. Isotonic's 42 levels mean 15 of
+the top 50 candidates land on exactly 1.0, which is useless for ordering. So the
+two jobs are split: the calibrated probability is displayed, the raw model score
+does the ranking.
+
+**Not done: nested cross-validation.** The Optuna search saw the CV folds, so
+model selection is mildly optimistic. The held-out test set was never touched by
+tuning, and the bootstrap interval is computed on it — but nesting the search
+inside an outer loop would multiply a 20-minute run by the outer fold count,
+beyond the CPU budget. Recorded here rather than passed over.
 
 ## Summary
 

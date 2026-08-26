@@ -10,8 +10,8 @@ then rebuilt with the methodology the hackathon version skipped.
 <!-- Add once deployed: **[Live demo](https://…)** · **[API docs](https://…/docs)** -->
 
 ```
-ROC-AUC 0.984 on held-out stars          ← the flattering number
-ROC-AUC 0.762 zero-shot on TESS          ← what it does on genuinely new data
+ROC-AUC 0.983 on held-out stars   (95% CI 0.976–0.988)   ← the flattering number
+ROC-AUC 0.762 zero-shot on TESS                          ← what it does on genuinely new data
 ```
 
 Both are reported, in that order, everywhere in this repo.
@@ -50,6 +50,25 @@ inflation source — sibling KOIs sharing a host star landing on both sides of a
 random split. Measured, it moves the result by less than noise (0.9860 → 0.9865),
 because only ~12% of rows have a sibling anywhere in the data. Grouping is kept
 because it is correct, not because it rescued the number.
+
+**Model choice turned out not to matter either.** Every family was scored under
+the same grouped CV, with the fold-to-fold spread reported next to the mean:
+
+| Model | PR-AUC |
+|---|---|
+| Soft-vote ensemble | 0.9690 ± 0.0053 |
+| CatBoost | 0.9686 ± 0.0048 |
+| XGBoost | 0.9679 ± 0.0058 |
+| LightGBM | 0.9662 ± 0.0056 |
+| HistGradientBoosting | 0.9655 ± 0.0069 |
+| Logistic regression | 0.8523 ± 0.0226 |
+| Dummy (prior) | 0.3620 ± 0.0107 |
+
+The five boosted rows span 0.0035 — **less than any one of their standard
+deviations.** Optuna moved CatBoost another 0.0011 over 25 trials, also inside
+the band. The honest reading is that this problem is won by the features and the
+evaluation protocol, not by the model; reporting "CatBoost, 0.969" without that
+± column would be over-reading the table.
 
 ## The ablation
 
@@ -130,10 +149,10 @@ what the physics predicts.
 
 ```bash
 make install
-exo ingest      # NASA archive -> data/raw/, recording query + timestamp
-exo train       # ~20 min, CPU only
-make serve      # API on :8000, docs at /docs
-make web        # UI on :5173
+exo ingest             # NASA archive -> data/raw/, recording query + timestamp
+exo train --trials 25  # ~20 min, CPU only (or `exo train --fast` in ~6)
+make serve             # API on :8000, docs at /docs
+make web               # UI on :5173
 ```
 
 Or `docker compose up --build`.
