@@ -47,9 +47,12 @@ Thumbs.db
 *.log
 *.tmp
 
-# ExoDiscover: data, artifacts, and caches
-data/
-artifacts/
+# ExoDiscover: data, artifacts, and caches.
+# Anchored with a leading slash: an unanchored `data/` also matches the source
+# package ml/exodiscover/data/, which silently kept schema.py and splits.py out
+# of every commit and broke CI on a fresh clone.
+/data/
+/artifacts/
 *.npy
 *.pkl
 *.joblib
@@ -58,6 +61,8 @@ artifacts/
 .mypy_cache/
 .pytest_cache/
 .ruff_cache/
+.coverage
+.claude/
 train_full.log
 train_full.err
 *.egg-info/
