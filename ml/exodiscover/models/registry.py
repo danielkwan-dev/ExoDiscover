@@ -4,6 +4,14 @@ Every model is scored identically under the same grouped CV, so any reported
 gain over the baseline is attributable to the model rather than to differences
 in how it was measured. The DummyClassifier is not decoration: it is the
 number every other row has to beat.
+
+Missing values arrive as NaN, because the feature builder no longer invents
+them. The boosted families and HistGradientBoosting learn a split direction for
+NaN directly from the training data, which beats imputing a median and -- more
+importantly here -- means SHAP explains the exact matrix the model scored.
+LogisticRegression and RandomForest cannot take NaN, so those two carry an
+explicit median imputer inside a pipeline; being fitted per fold, it never sees
+the fold it is evaluated on.
 """
 
 from __future__ import annotations
@@ -29,6 +37,21 @@ TUNABLE: frozenset[str] = frozenset(
 )
 
 
+#: Step name given to the learner inside every pipeline in this module, so a
+#: caller can address its parameters as ``clf__<name>``.
+FINAL_STEP = "clf"
+
+
+def final_estimator(estimator: BaseEstimator) -> BaseEstimator:
+    """The learner itself, with any preprocessing pipeline stripped away."""
+    return estimator.steps[-1][1] if isinstance(estimator, Pipeline) else estimator
+
+
+def param_prefix(estimator: BaseEstimator) -> str:
+    """Prefix that addresses the learner's own parameters on ``estimator``."""
+    return f"{FINAL_STEP}__" if isinstance(estimator, Pipeline) else ""
+
+
 def candidates(seed: int) -> dict[str, BaseEstimator]:
     return {
         "dummy": DummyClassifier(strategy="prior", random_state=seed),
@@ -39,8 +62,20 @@ def candidates(seed: int) -> dict[str, BaseEstimator]:
                 ("clf", LogisticRegression(max_iter=2000, random_state=seed)),
             ]
         ),
-        "random_forest": RandomForestClassifier(
-            n_estimators=400, min_samples_leaf=2, n_jobs=-1, random_state=seed
+        # The forest is the one tree family that cannot take NaN, so it gets an
+        # explicit imputer. Fitted inside the pipeline, it learns its medians
+        # from the training fold only and is persisted with the model, which is
+        # what keeps scoring independent of the batch a row arrives in.
+        "random_forest": Pipeline(
+            [
+                ("impute", SimpleImputer(strategy="median")),
+                (
+                    "clf",
+                    RandomForestClassifier(
+                        n_estimators=400, min_samples_leaf=2, n_jobs=-1, random_state=seed
+                    ),
+                ),
+            ]
         ),
         "hist_gb": HistGradientBoostingClassifier(random_state=seed),
         "xgboost": XGBClassifier(

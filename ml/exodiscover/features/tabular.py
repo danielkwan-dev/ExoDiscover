@@ -47,7 +47,8 @@ FEATURE_COLUMNS: list[str] = [
 #: temporal: a confirmed planet's parameters were *refined by the follow-up
 #: observations that confirmed it*, so the uncertainty encodes the label's
 #: consequence rather than the signal's nature. Dropping them costs the binary
-#: model 0.003 ROC-AUC (0.9865 -> 0.9835). See docs/LEAKAGE.md.
+#: model 0.003 ROC-AUC (0.9865 -> 0.9835, as measured when the decision was
+#: taken). See docs/LEAKAGE.md.
 EXCLUDED_UNCERTAINTY_FEATURES: list[str] = [
     "rel_err_period",
     "rel_err_depth",
@@ -178,17 +179,21 @@ def build_features(koi: pd.DataFrame) -> pd.DataFrame:
     expected_dep = expected_depth_ppm(prad.to_numpy(), out["koi_srad"].to_numpy())
     out["depth_ratio"] = _safe_ratio(depth, pd.Series(expected_dep, index=df.index))
 
-    # Prefer a catalog-wide count attached by add_multiplicity; fall back to
-    # counting within this frame only when one was not supplied.
-    if MULTIPLICITY_COLUMN in df.columns:
-        out["n_kois_on_star"] = _numeric(df, MULTIPLICITY_COLUMN, 1.0)
-    elif "kepid" in df.columns:
-        out["n_kois_on_star"] = df.groupby("kepid")["kepid"].transform("size").astype(float)
-    else:
-        out["n_kois_on_star"] = 1.0
+    # Multiplicity must be counted over the whole catalog by add_multiplicity
+    # and handed in. Counting within whatever frame arrives here would make the
+    # answer depend on the batch: the same star reads as 1 KOI when a row is
+    # scored alone and as 5 when scored beside its siblings. Unknown means NaN,
+    # which the model handles, rather than a 1.0 that asserts a lone KOI.
+    out["n_kois_on_star"] = _numeric(df, MULTIPLICITY_COLUMN)
 
+    # Infinities are arithmetic accidents -- a division by a zero radius -- and
+    # become NaN. Genuine NaN is left alone: filling it here used the median of
+    # whatever frame happened to be passed, which made a row's features depend
+    # on its batch (0.0 when served alone, the catalog median when served with
+    # the catalog) and computed test-fold statistics from the test fold itself.
+    # Imputation belongs to the estimator, where it is fitted on training data
+    # only and travels with the persisted model. See models/registry.py.
     out = out[FEATURE_COLUMNS].replace([np.inf, -np.inf], np.nan)
-    out = out.fillna(out.median(numeric_only=True)).fillna(0.0)
 
     assert_no_leakage(out, context="feature matrix")
     return out

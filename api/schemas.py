@@ -49,7 +49,10 @@ class KOIInput(BaseModel):
 
 class Contribution(BaseModel):
     feature: str
-    value: float
+    #: None when the caller omitted this input. The model scores the row
+    #: regardless; inventing a number here would report a measurement that was
+    #: never taken.
+    value: float | None
     shap: float
 
 

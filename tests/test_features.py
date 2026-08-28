@@ -99,9 +99,42 @@ def test_uncertainty_features_stay_excluded(koi_sample):
     assert not any(c.startswith("rel_err") for c in tabular.FEATURE_COLUMNS)
 
 
-def test_build_features_emits_only_finite_values(koi_sample):
+def test_build_features_emits_no_infinities(koi_sample):
+    """Divisions by zero must not survive as +/-inf.
+
+    Missing values are a different matter: they are left as NaN for the model
+    to handle, because filling them here made the result depend on the batch.
+    See test_features_do_not_depend_on_the_rest_of_the_batch.
+    """
     X = tabular.build_features(koi_sample)
-    assert np.isfinite(X.to_numpy(dtype=float)).all()
+    assert not np.isinf(X.to_numpy(dtype=float)).any()
+
+
+def test_features_do_not_depend_on_the_rest_of_the_batch(koi_sample):
+    """The API scores one row per request; training saw thousands at once.
+
+    build_features used to impute with the median of whatever frame it was
+    handed, so a KOI with a missing field got the training median during
+    training and 0.0 when served alone -- log_prad 0.0 implies a 1 R_earth
+    planet. The same object scored differently depending on how many rows
+    happened to accompany it in the request.
+    """
+    df = koi_sample.reset_index(drop=True)
+    probe = df.index[0]
+    df.loc[probe, "koi_prad"] = np.nan
+
+    alone = tabular.build_features(df.loc[[probe]])
+    in_batch = tabular.build_features(df).loc[[probe]]
+
+    pd.testing.assert_frame_equal(alone, in_batch)
+
+
+def test_missing_inputs_stay_missing(koi_sample):
+    """A NaN in must not be silently invented into a plausible-looking value."""
+    df = koi_sample.reset_index(drop=True)
+    df.loc[df.index[0], "koi_prad"] = np.nan
+    X = tabular.build_features(df)
+    assert np.isnan(X.loc[df.index[0], "log_prad"])
 
 
 def test_multiplicity_counts_kois_per_star():
@@ -117,8 +150,31 @@ def test_multiplicity_counts_kois_per_star():
             "koi_impact": [0.3] * 4,
         }
     )
-    X = tabular.build_features(df)
+    X = tabular.build_features(tabular.add_multiplicity(df))
     assert X["n_kois_on_star"].tolist() == [3.0, 3.0, 3.0, 1.0]
+
+
+def test_multiplicity_is_unknown_rather_than_one_when_not_supplied():
+    """A frame that never went through add_multiplicity cannot know the count.
+
+    Defaulting to 1.0 would assert "this star hosts a single KOI" -- a claim
+    with real weight, since multiplicity is the third strongest feature in the
+    model and multi-planet systems are rarely false positives.
+    """
+    df = pd.DataFrame(
+        {
+            "kepid": [1, 1],
+            "koi_period": [1.0, 2.0],
+            "koi_srad": [1.0, 1.0],
+            "koi_slogg": [4.5, 4.5],
+            "koi_prad": [1.0, 1.0],
+            "koi_depth": [100.0, 100.0],
+            "koi_duration": [2.0, 2.0],
+            "koi_impact": [0.3, 0.3],
+        }
+    )
+    X = tabular.build_features(df)
+    assert X["n_kois_on_star"].isna().all()
 
 
 def test_missing_optional_columns_do_not_crash():
@@ -136,4 +192,7 @@ def test_missing_optional_columns_do_not_crash():
     )
     X = tabular.build_features(df)
     assert list(X.columns) == tabular.FEATURE_COLUMNS
-    assert np.isfinite(X.to_numpy(dtype=float)).all()
+    # Absent columns surface as NaN for the estimator to handle, but the
+    # columns that *were* supplied must still compute.
+    assert not np.isinf(X.to_numpy(dtype=float)).any()
+    assert X[["log_period", "log_depth", "log_prad", "koi_srad"]].notna().all().all()

@@ -1,16 +1,17 @@
 # Model card — ExoDiscover binary classifier
 
-**Version** 0.1.0 · **Family** CatBoost, Optuna-tuned, isotonic calibration ·
-**Task** Confirmed planet vs false positive, from Kepler transit parameters.
+**Version** 0.1.0 · **Family** Soft-vote ensemble (CatBoost + XGBoost +
+LightGBM), isotonic calibration · **Task** Confirmed planet vs false positive,
+from Kepler transit parameters.
 
 ## Start here: what it can actually do
 
-On **new data from a different telescope**, this model reaches **0.762 ROC-AUC
-and a Brier score of 0.222** — its probabilities stop being trustworthy
-entirely. That is the number that describes its real-world use, and it is
+On **new data from a different telescope**, this model reaches **0.838 ROC-AUC
+and a Brier score of 0.177** — the ranking mostly survives, the probabilities
+do not. That is the number that describes its real-world use, and it is
 reported before the flattering one on purpose.
 
-On held-out Kepler stars it reaches **0.983 ROC-AUC (95% CI 0.976–0.988)**.
+On held-out Kepler stars it reaches **0.984 ROC-AUC (95% CI 0.979–0.988)**.
 Both are true; they measure different things.
 
 ## Intended use
@@ -31,11 +32,13 @@ NASA Exoplanet Archive `cumulative` table (Kepler Objects of Interest).
 |---|---|
 | Total catalog | 9,564 KOIs across 8,214 host stars |
 | Used for training | 7,585 rows with a resolved disposition (2,746 CONFIRMED, 4,839 FALSE POSITIVE) |
-| Fit on | 6,061 rows / 5,313 stars |
-| Held out | 1,524 rows, from stars absent from training |
+| Fit on | 5,287 rows / 4,647 stars (70%) |
+| Held out | 2,298 rows / 1,992 stars (30%), absent from training entirely |
 | Withheld entirely | 1,979 CANDIDATE rows — scored as the discovery set, never trained on |
 
-Splits are grouped on `kepid` throughout. K2 is ingested but excluded: its
+Splits are grouped on `kepid` throughout, and hold out whole stars at the exact
+requested fraction rather than the nearest `1/k` a k-fold can express. K2 is
+ingested but excluded: its
 archive table lacks transit depth and duration, so merging it would introduce a
 missingness pattern that identifies the mission.
 
@@ -58,63 +61,86 @@ post-confirmation parameter refinement. See `LEAKAGE.md`.
 
 ## Performance
 
-Held-out stars, n = 1,524, base rate 0.366. Intervals are 95% bootstrap,
+Held-out stars, n = 2,298, base rate 0.369. Intervals are 95% bootstrap,
 resampling **host stars** rather than rows — sibling KOIs are not independent
 draws, so a row bootstrap would report an interval narrower than the data
 supports.
 
 | Metric | Value | 95% CI |
 |---|---|---|
-| ROC-AUC | 0.9827 | 0.9764 – 0.9881 |
-| PR-AUC | 0.9699 | 0.9581 – 0.9793 |
-| Brier | 0.0474 | — |
+| ROC-AUC | 0.9839 | 0.9792 – 0.9879 |
+| PR-AUC | 0.9666 | 0.9551 – 0.9757 |
+| Brier | 0.0440 | — |
+| Accuracy | 0.9356 | — |
 | Precision@50 | 1.000 | — |
 
-Confusion matrix at threshold 0.5: 923 TN, 44 FP, 54 FN, 503 TP.
+Confusion matrix at threshold 0.5: 1,409 TN, 42 FP, 106 FN, 741 TP. Accuracy is
+listed but not headlined: the classes are imbalanced 63/37, so always guessing
+"false positive" already scores 0.631, and the operational question is ranking
+rather than classification. The error profile is asymmetric on purpose — the
+model misses 106 real planets to raise only 42 false alarms, which is the right
+bias for a shortlist that costs telescope time.
+
+### Is it overfitting?
+
+No, and the evidence is recorded rather than asserted. Overfitting is a gap, not
+a level:
+
+| | ROC-AUC |
+|---|---|
+| On the rows it trained on | 0.9999 |
+| On held-out stars | 0.9854 |
+| **Gap** | **0.0145** |
+
+The learning curve, measured against the same 1,992 held-out stars throughout,
+is flat past half the data: 0.9764 from 519 rows, 0.9809 from 1,300, 0.9854 from
+all 5,287. Both are written to `docs/metrics/metrics.json` by every training run
+under the `overfitting` key.
 
 Model ladder, grouped 5-fold CV — every family measured identically, with the
 fold-to-fold spread alongside:
 
 | Model | PR-AUC | ROC-AUC | Brier |
 |---|---|---|---|
-| Soft-vote ensemble | 0.9690 ± 0.0053 | 0.9829 | 0.0463 |
-| CatBoost | 0.9686 ± 0.0048 | 0.9826 | 0.0463 |
-| XGBoost | 0.9679 ± 0.0058 | 0.9823 | 0.0472 |
-| LightGBM | 0.9662 ± 0.0056 | 0.9816 | 0.0503 |
-| HistGradientBoosting | 0.9655 ± 0.0069 | 0.9815 | 0.0489 |
-| RandomForest | 0.9613 ± 0.0069 | 0.9787 | 0.0539 |
-| Logistic regression | 0.8523 ± 0.0226 | 0.9153 | 0.1124 |
+| Soft-vote ensemble | 0.9694 ± 0.0056 | 0.9832 | 0.0457 |
+| XGBoost | 0.9687 ± 0.0057 | 0.9826 | 0.0464 |
+| CatBoost | 0.9686 ± 0.0053 | 0.9827 | 0.0463 |
+| LightGBM | 0.9666 ± 0.0064 | 0.9818 | 0.0492 |
+| HistGradientBoosting | 0.9664 ± 0.0061 | 0.9815 | 0.0483 |
+| RandomForest | 0.9614 ± 0.0073 | 0.9786 | 0.0539 |
+| Logistic regression | 0.8525 ± 0.0226 | 0.9154 | 0.1124 |
 | Dummy (prior) | 0.3620 ± 0.0107 | 0.5000 | 0.2310 |
 
-**The spread is the point.** The five boosted rows span 0.0035 PR-AUC, which is
+**The spread is the point.** The top five rows span 0.0030 PR-AUC, which is
 smaller than any one of their fold-to-fold standard deviations. Ranking them
-against each other is not meaningful, and a project that reported "CatBoost is
-our best model, 0.969" without that column would be over-reading its own table.
+against each other is not meaningful, and a project that reported "our best
+model, 0.969" without that column would be over-reading its own table.
 
-Optuna then searched CatBoost over 25 trials under the same grouped CV,
-improving it 0.9686 → 0.9697 — enough to pass the untuned ensemble (0.9690), so
-the tuned single model ships. That margin is also inside the noise band; the
-tuned model is preferred for being simpler and smaller than the ensemble, not
-for being detectably better.
+Optuna then searched XGBoost — the best *tunable* family — over 40 trials under
+the same grouped CV, improving it 0.9687 → 0.9689. That did not pass the untuned
+ensemble (0.9694), so the soft-vote ensemble ships. Both margins are inside the
+noise band, and the ensemble is preferred on its CV score alone, not because any
+difference here is detectable.
 
-The held-out ROC-AUC (0.9827) is marginally below the untuned run's (0.9844).
-Tuning optimised cross-validated PR-AUC, and the test set is one draw; both
-values sit inside the reported confidence interval.
+Note that the ensemble fits its training data harder than a single model does —
+0.9999 train ROC-AUC against CatBoost's 0.9947 — which widens the
+generalisation gap from 0.008 to 0.015. Still well inside the threshold, but
+worth stating rather than glossing.
 
 ## Calibration
 
 Two methods were fitted and compared on a third, star-disjoint slice that
 neither the base model nor the calibrator had seen:
 
-| Method | Brier | Distinct probabilities emitted (n = 1,483) |
+| Method | Brier | Distinct probabilities emitted (n = 1,053) |
 |---|---|---|
-| **Isotonic** (selected) | **0.0537** | **42** |
-| Sigmoid (Platt) | 0.0570 | 1,483 |
+| **Isotonic** (selected) | **0.0576** | **30** |
+| Sigmoid (Platt) | 0.0599 | 1,053 |
 
 Isotonic is better calibrated and was selected on that basis. But the second
-column is the trade it makes: as a step function it collapses its input into 42
-levels, so it is nearly useless for fine-grained ordering — 15 of the first 50
-ranked candidates came out at exactly 1.0. Sigmoid never ties but is measurably
+column is the trade it makes: as a step function it collapses its input into 30
+levels, so it is nearly useless for fine-grained ordering — many of the first 50
+ranked candidates come out at exactly 1.0. Sigmoid never ties but is measurably
 worse calibrated.
 
 Rather than pick one property and lose the other, the two jobs are separated:
@@ -123,12 +149,13 @@ score is what does the ranking.** Read a displayed 1.0 as "at the top of the
 range the calibration set could resolve", not as certainty.
 
 The reliability curve is in `docs/metrics/reliability.png`. Calibration is
-**Kepler-specific** and does not transfer (Brier 0.067 → 0.222 on TESS).
+**Kepler-specific** and does not transfer (Brier 0.069 → 0.177 on TESS).
 
 ## Limitations
 
-1. **Cross-mission transfer is poor.** 0.762 ROC-AUC on TESS, with calibration
-   destroyed. Do not use the probabilities off-domain.
+1. **Cross-mission transfer degrades.** 0.838 ROC-AUC on TESS, down from 0.965
+   in-domain, with the Brier score more than doubling. The ordering is still
+   useful off-domain; the probabilities are not.
 2. **The task is easier than the headline suggests.** Kepler false positives are
    dominated by eclipsing binaries whose implied planet radius is physically
    impossible — 99.8% of objects above 40 R⊕ are false positives. The model is
@@ -143,9 +170,9 @@ The reliability curve is in `docs/metrics/reliability.png`. Calibration is
    unverifiable number, the track was dropped. The preprocessing pipeline
    remains as an explainer. Fixing this needs bulk MAST downloads with identity
    preserved.
-5. **Model choice is inside the noise band.** Tuning moved CatBoost by 0.0011
-   PR-AUC and the whole boosted group spans 0.0035, against fold standard
-   deviations near 0.005. Do not read the ladder ordering as a finding.
+5. **Model choice is inside the noise band.** Tuning moved XGBoost by 0.0002
+   PR-AUC and the top five families span 0.0030, against fold standard
+   deviations near 0.006. Do not read the ladder ordering as a finding.
 6. **No nested cross-validation.** The honest estimate comes from a
    star-held-out test set plus a grouped bootstrap, not from nesting the Optuna
    search inside an outer CV loop. Nesting would multiply a ~20-minute run by
@@ -161,8 +188,11 @@ The reliability curve is in `docs/metrics/reliability.png`. Calibration is
 ```bash
 make install
 exo ingest              # NASA archive -> data/raw/, query + timestamp recorded
-exo train --trials 25   # ~20 min on a laptop CPU
+exo train --trials 40   # ~25 min on a laptop CPU
 exo train --fast        # ~6 min, skips the Optuna search
 ```
+
+The trained artifact is committed, so serving the API and UI needs none of the
+above — see "Run it" in the README.
 
 Seed is 42 throughout, set once in `ml/exodiscover/config.py`.

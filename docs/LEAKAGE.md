@@ -24,7 +24,7 @@ A model given these does not learn transit physics; it learns to read the
 vetting pipeline's mind. The original `predict.py` and `train_xgboost.py`
 selected feature columns by hand and never excluded them.
 
-**Effect: ROC-AUC 0.9999 with them, 0.9865 without.** The leaky setup is
+**Effect: ROC-AUC 0.9999 with them, 0.9840 without.** The leaky setup is
 essentially a lookup table.
 
 These are now quarantined in `ml/exodiscover/data/schema.py::LEAKY_COLUMNS`,
@@ -44,13 +44,14 @@ continuous series.
 
 | Split | ROC-AUC |
 |---|---|
-| Random rows | 0.9860 |
-| Grouped by host star | 0.9865 |
+| Random rows | 0.9846 |
+| Grouped by host star | 0.9840 |
 
-The difference is within noise, and grouping actually scored marginally
-*higher*. The reason is arithmetic: the binary training set holds 7,585 rows
-across 6,639 stars, so only about 12% of rows have a sibling anywhere in the
-data. There is not enough overlap for the contamination to matter.
+The difference is within noise, and grouping scores marginally *lower* — that
+is, the contamination it removes was worth 0.0006. The reason is arithmetic:
+the binary training set holds 7,585 rows across 6,639 stars, so only about 21%
+of rows have a sibling anywhere in the data, and most of those siblings are
+pairs. There is not enough overlap for the contamination to matter.
 
 Grouping is kept because it is the methodologically correct choice and it costs
 nothing — but the honest finding is that on this dataset it was not the problem.
@@ -86,19 +87,20 @@ uncertainty is therefore a consequence of the label rather than a property of
 the signal, and it would not be available at the moment a real classifier has
 to make its call.
 
-Removing them costs the binary model **0.003 ROC-AUC (0.9865 → 0.9835 at
-measurement time)**. Cheap enough that keeping a feature I cannot defend was
+Removing them cost the binary model **0.003 ROC-AUC (0.9865 → 0.9835 as
+measured at the time of the decision, on the then-current pipeline)**. Cheap
+enough that keeping a feature I cannot defend was
 not worth it. `tests/test_features.py::test_uncertainty_features_stay_excluded`
 locks the decision in.
 
 ## 4. Why 0.98 is real here, not a fourth leak
 
-The clean, grouped model scores 0.9827 ROC-AUC. That is high enough to be
+The clean, grouped model scores 0.9839 ROC-AUC. That is high enough to be
 suspicious, so it was checked rather than reported.
 
-`log_prad` (planet radius) dominates the SHAP ranking at 1.63 mean abs — roughly
-double the next feature (`koi_model_snr`, 0.86). It turns out to be genuine
-physics:
+`log_prad` (planet radius) leads the SHAP ranking at 1.82 mean abs, ahead of
+`n_kois_on_star` (1.39), `duration_ratio` (1.23) and `koi_model_snr` (1.20). It
+turns out to be genuine physics:
 
 | Disposition | median radius | 90th pct | max |
 |---|---|---|---|
@@ -112,9 +114,16 @@ genuinely easy, and easy for the right reason.
 
 Two checks confirm it is not a single load-bearing artefact:
 
-- `log_prad` **alone** reaches only 0.8292 ROC-AUC.
-- **Removing** `log_prad` entirely leaves 0.9886 — the signal is redundantly
+- `log_prad` **alone** reaches only 0.8381 ROC-AUC.
+- **Removing** `log_prad` entirely leaves 0.9846 — the signal is redundantly
   distributed across depth, duration consistency, and multiplicity.
+
+A third check answers the other thing a high score usually means. Overfitting is
+a gap, not a level: the model scores 0.9999 on the rows it trained on against
+0.9854 on held-out stars, a gap of **0.0145**. Trained on a tenth of the stars
+it still reaches 0.9764, and the learning curve is flat past half the data. Both
+figures are written to `docs/metrics/metrics.json` under `overfitting` by every
+run, so the claim is checkable rather than asserted.
 
 **The honest caveat:** this model is good at *planet vs eclipsing binary*. That
 is an easier question than the one the Robovetter faces on marginal signals,
@@ -158,9 +167,9 @@ false positive, collapsing the 3-class output at inference:
 
 | Framing | ROC-AUC | PR-AUC | Brier |
 |---|---|---|---|
-| Binary (Confirmed vs FP) | **0.9865** | **0.9778** | **0.0429** |
-| Diagnostic (Confirmed vs Candidate) | 0.9349 | 0.9522 | 0.1017 |
-| Flat 3-class | 0.9319 | 0.9318 | 0.1053 |
+| Binary (Confirmed vs FP) | **0.9840** | **0.9721** | **0.0427** |
+| Diagnostic (Confirmed vs Candidate) | 0.9411 | 0.9537 | 0.0941 |
+| Flat 3-class | 0.9201 | 0.9193 | 0.1171 |
 
 Binary wins decisively, so it ships. The diagnostic's SHAP breakdown (§3) is
 the more interesting result: the third class is separable, but substantially on
@@ -177,14 +186,21 @@ only features both catalogs express:
 
 | | n | ROC-AUC | PR-AUC | Brier |
 |---|---|---|---|---|
-| Kepler (in-domain) | 1,524 | 0.9671 | 0.9409 | 0.0670 |
-| TESS (zero-shot) | 2,562 | **0.7619** | 0.6906 | **0.2223** |
+| Kepler (in-domain) | 2,298 | 0.9653 | 0.9345 | 0.0694 |
+| TESS (zero-shot) | 2,562 | **0.8376** | 0.8031 | **0.1771** |
 
-ROC-AUC falls by 0.205 and the Brier score more than triples. **The calibration
-does not survive the domain shift at all** — probabilities that are trustworthy
-on Kepler are not trustworthy on TESS. TESS has shorter baselines, a redder
-bandpass, larger pixels and therefore more blending, and a different
-false-positive population.
+ROC-AUC falls by 0.128 and the Brier score more than doubles. **The ranking
+largely survives the domain shift; the calibration does not** — probabilities
+that are trustworthy on Kepler are not trustworthy on TESS. TESS has shorter
+baselines, a redder bandpass, larger pixels and therefore more blending, and a
+different false-positive population.
+
+This figure also measures one of the fixes above. TESS does not carry several
+KOI columns at all, and an earlier feature builder filled those gaps with the
+*Kepler* median — a fabricated value asserting a measurement TESS never made.
+Letting them stay missing, for the boosted models to route down a learned
+branch, moved zero-shot ROC-AUC from 0.7619 to 0.8376 with no change to the
+model itself. Imputing across a domain boundary was quietly costing 0.076.
 
 This is the number that says what the model can actually do on new data, and it
 is much less flattering than 0.98. It is reported first in the model card for
@@ -197,10 +213,11 @@ that reason.
 Every comparison above is between figures with real uncertainty, so the
 uncertainty is measured rather than left implicit.
 
-**Fold-to-fold spread** accompanies each cross-validated score. The five boosted
-families span 0.0035 PR-AUC while their individual standard deviations run
-0.0048–0.0069 — the ordering among them carries no information. Optuna's 25-trial
-search moved the winner a further 0.0011, also inside the band.
+**Fold-to-fold spread** accompanies each cross-validated score. The top five
+families span 0.0030 PR-AUC while their individual standard deviations run
+0.0053–0.0064 — the ordering among them carries no information. Optuna's
+40-trial search moved the best tunable family a further 0.0002, well inside the
+band.
 
 **Confidence intervals** on the held-out metrics come from a bootstrap that
 resamples **host stars, not rows**, for the same reason the splits are grouped:
@@ -209,21 +226,21 @@ bootstrap reports an interval narrower than the data supports.
 
 | Metric | Value | 95% CI |
 |---|---|---|
-| ROC-AUC | 0.9827 | 0.9764 – 0.9881 |
-| PR-AUC | 0.9699 | 0.9581 – 0.9793 |
+| ROC-AUC | 0.9839 | 0.9792 – 0.9879 |
+| PR-AUC | 0.9666 | 0.9551 – 0.9757 |
 
 **Calibration involved a real trade**, not a default. Isotonic and sigmoid were
 both fitted and scored on a third, star-disjoint slice:
 
-| Method | Brier | Distinct probabilities (n = 1,483) |
+| Method | Brier | Distinct probabilities (n = 1,053) |
 |---|---|---|
-| Isotonic (selected) | 0.0537 | 42 |
-| Sigmoid | 0.0570 | 1,483 |
+| Isotonic (selected) | 0.0576 | 30 |
+| Sigmoid | 0.0599 | 1,053 |
 
-Isotonic calibrates better; sigmoid never ties. Isotonic's 42 levels mean 15 of
-the top 50 candidates land on exactly 1.0, which is useless for ordering. So the
-two jobs are split: the calibrated probability is displayed, the raw model score
-does the ranking.
+Isotonic calibrates better; sigmoid never ties. Isotonic's 30 levels mean many
+of the top 50 candidates land on exactly 1.0, which is useless for ordering. So
+the two jobs are split: the calibrated probability is displayed, the raw model
+score does the ranking.
 
 **Not done: nested cross-validation.** The Optuna search saw the CV folds, so
 model selection is mildly optimistic. The held-out test set was never touched by
@@ -235,9 +252,10 @@ beyond the CPU budget. Recorded here rather than passed over.
 
 | Issue | Where | Effect |
 |---|---|---|
-| Robovetter verdict columns as features | `predict.py`, `train_xgboost.py` | 0.9999 → 0.9865 |
+| Robovetter verdict columns as features | `predict.py`, `train_xgboost.py` | 0.9999 → 0.9840 |
 | Row-level rather than star-level splits | `train_xgboost.py:110` | negligible here; fatal for light curves |
 | Uncertainty features encoding follow-up | new design, caught and removed | −0.003, removed anyway |
 | Windows from ≤15 stars, identity lost | `create_training_data.py:21` | track dropped |
 | TESS `KP` mapped to Candidate | `preprocess_merge.py:149` | corrected; `APC`/`FA` no longer dropped |
-| Three-class framing | throughout | replaced by binary, 0.9319 → 0.9865 |
+| Three-class framing | throughout | replaced by binary, 0.9201 → 0.9840 |
+| Batch-median imputation inside feature building | `build_features` | train/serve skew; TESS transfer 0.7619 → 0.8376 |

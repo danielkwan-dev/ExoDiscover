@@ -7,11 +7,12 @@ Built for [NASA Space Apps 2025, "A World Away: Hunting for Exoplanets with
 AI"](https://www.spaceappschallenge.org/2025/challenges/a-world-away-hunting-for-exoplanets-with-ai/),
 then rebuilt with the methodology the hackathon version skipped.
 
-<!-- Add once deployed: **[Live demo](https://…)** · **[API docs](https://…/docs)** -->
+Runs locally, CPU only — [setup below](#run-it). Nothing is hosted: the API and
+the UI each start with one command.
 
 ```
-ROC-AUC 0.983 on held-out stars   (95% CI 0.976–0.988)   ← the flattering number
-ROC-AUC 0.762 zero-shot on TESS                          ← what it does on genuinely new data
+ROC-AUC 0.984 on held-out stars   (95% CI 0.979–0.988)   ← the flattering number
+ROC-AUC 0.838 zero-shot on TESS                          ← what it does on genuinely new data
 ```
 
 Both are reported, in that order, everywhere in this repo.
@@ -28,7 +29,7 @@ project is the correction.
 vetting pipeline's own confidence in its verdict, and four `koi_fpflag_*`
 columns are its individual false-positive decisions. Feed them to a model and it
 reaches **ROC-AUC 0.9999** — it has learned to read the label, not the physics.
-Remove them and the honest figure is 0.9865.
+Remove them and the honest figure is 0.9840.
 
 They are now quarantined in one place, dropped on the way into feature
 construction and asserted absent on the way out, with a test that fails the
@@ -47,8 +48,9 @@ build if one ever gets through.
 
 **And one thing I got wrong.** I expected star-level split leakage to be a major
 inflation source — sibling KOIs sharing a host star landing on both sides of a
-random split. Measured, it moves the result by less than noise (0.9860 → 0.9865),
-because only ~12% of rows have a sibling anywhere in the data. Grouping is kept
+random split. Measured, it moves the result by less than noise (0.9846 random →
+0.9840 grouped) — and in the direction that makes the honest number *lower*, by
+0.0006. 21% of rows have a sibling anywhere in the data. Grouping is kept
 because it is correct, not because it rescued the number.
 
 **Model choice turned out not to matter either.** Every family was scored under
@@ -56,27 +58,28 @@ the same grouped CV, with the fold-to-fold spread reported next to the mean:
 
 | Model | PR-AUC |
 |---|---|
-| Soft-vote ensemble | 0.9690 ± 0.0053 |
-| CatBoost | 0.9686 ± 0.0048 |
-| XGBoost | 0.9679 ± 0.0058 |
-| LightGBM | 0.9662 ± 0.0056 |
-| HistGradientBoosting | 0.9655 ± 0.0069 |
-| Logistic regression | 0.8523 ± 0.0226 |
+| Soft-vote ensemble | 0.9694 ± 0.0056 |
+| XGBoost | 0.9687 ± 0.0057 |
+| CatBoost | 0.9686 ± 0.0053 |
+| LightGBM | 0.9666 ± 0.0064 |
+| HistGradientBoosting | 0.9664 ± 0.0061 |
+| Random forest | 0.9614 ± 0.0073 |
+| Logistic regression | 0.8525 ± 0.0226 |
 | Dummy (prior) | 0.3620 ± 0.0107 |
 
-The five boosted rows span 0.0035 — **less than any one of their standard
-deviations.** Optuna moved CatBoost another 0.0011 over 25 trials, also inside
-the band. The honest reading is that this problem is won by the features and the
-evaluation protocol, not by the model; reporting "CatBoost, 0.969" without that
-± column would be over-reading the table.
+The six tree-based rows span 0.0080 — **about one standard deviation**, and the
+top five span 0.0030. Optuna moved XGBoost another 0.0002 over 40 trials, well
+inside the band. The honest reading is that this problem is won by the features
+and the evaluation protocol, not by the model; reporting "soft-vote, 0.969"
+without that ± column would be over-reading the table.
 
 ## The ablation
 
 | Setup | ROC-AUC | What changed |
 |---|---|---|
 | Robovetter columns present, random split | **0.9999** | reproduces the original methodology |
-| Leakage removed, random split | 0.9860 | the label columns quarantined |
-| Leakage removed, stars held out | **0.9865** | the honest number |
+| Leakage removed, random split | 0.9846 | the label columns quarantined |
+| Leakage removed, stars held out | **0.9840** | the honest number |
 
 ## Is 0.98 too good?
 
@@ -89,8 +92,24 @@ out at **200,346 R⊕**. Nothing that large is a planet. 99.8% of objects above
 40 R⊕ are false positives.
 
 Two checks confirm no single feature is load-bearing: `log_prad` alone reaches
-only 0.829, and *removing* it entirely still leaves 0.989 — the signal is spread
+only 0.838, and *removing* it entirely still leaves 0.985 — the signal is spread
 across depth, duration consistency, and multiplicity.
+
+**And it is not overfitting**, which is the other thing a high score usually
+means. Overfitting is a gap, not a level, so every run records one:
+
+| | ROC-AUC |
+|---|---|
+| On the rows it trained on | 0.9999 |
+| On 1,992 held-out stars | 0.9854 |
+| **Generalisation gap** | **0.0145** |
+
+A model that memorised its training set scores ~1.0 on the left and falls away
+sharply on the right. This one also barely notices being starved: trained on 10%
+of the stars — 519 rows — it still reaches 0.9764 against 0.9854 on all 5,287,
+and the curve is flat past half the data. The ceiling belongs to the task, not
+to the model. Both the gap and the full learning curve are written to
+`docs/metrics/metrics.json` on every run.
 
 So the score is real, but the task is easier than it sounds. This model is good
 at *planet vs eclipsing binary*. The TESS result below is where the limits show.
@@ -107,12 +126,20 @@ features both catalogs express:
 
 | | n | ROC-AUC | Brier |
 |---|---|---|---|
-| Kepler (in-domain) | 1,524 | 0.9671 | 0.0670 |
-| TESS (zero-shot) | 2,562 | **0.7619** | **0.2223** |
+| Kepler (in-domain) | 2,298 | 0.9653 | 0.0694 |
+| TESS (zero-shot) | 2,562 | **0.8376** | **0.1771** |
 
-ROC-AUC drops 0.205 and the Brier score more than triples — the calibration does
-not survive the domain shift at all. TESS has shorter baselines, a redder
-bandpass, and larger pixels, so its false-positive population is different.
+ROC-AUC drops 0.128 and the Brier score more than doubles: the *ranking* largely
+survives the domain shift, the *calibration* does not. TESS has shorter
+baselines, a redder bandpass, and larger pixels, so its false-positive
+population is different.
+
+This number is also the clearest evidence for one of the fixes above. TESS
+frames do not carry several KOI columns at all, and an earlier version of the
+feature builder filled those gaps with Kepler medians — fabricated values that
+actively misled the model on another mission's data. Letting them stay missing,
+for the boosted models to route down a learned branch, moved zero-shot ROC-AUC
+from 0.762 to 0.838.
 
 This is what the challenge actually asked for — analyse *new* data — and it is
 the honest answer.
@@ -141,21 +168,69 @@ These are unit-tested against Kepler-10 b's published values: the duration
 formula returns 1.804 h against a measured 1.811 h. A wrong constant fails the
 build rather than quietly degrading the model.
 
-A useful sanity signal falls out of it — median `duration_ratio` is 1.045 for
-confirmed planets and 1.090 for false positives. Real planets sit closest to
+A useful sanity signal falls out of it — median `duration_ratio` is 1.042 for
+confirmed planets and 1.429 for false positives. Real planets sit closest to
 what the physics predicts.
 
 ## Run it
 
+Everything runs on localhost; nothing is deployed. The trained model and its
+metrics are committed, so **you do not need to download a catalog or train
+anything** to see it working.
+
+**Prerequisites:** Python 3.11 or 3.12, Node 20+.
+
 ```bash
-make install
-exo ingest             # NASA archive -> data/raw/, recording query + timestamp
-exo train --trials 25  # ~20 min, CPU only (or `exo train --fast` in ~6)
-make serve             # API on :8000, docs at /docs
-make web               # UI on :5173
+make install     # pip install -e ".[dev]" + api deps, then npm install in web/
 ```
 
-Or `docker compose up --build`.
+Then two terminals:
+
+```bash
+make serve       # FastAPI on :8000  — interactive docs at http://localhost:8000/docs
+make web         # React UI on :5173 — points at :8000 by default
+```
+
+Open <http://localhost:5173>. Set `VITE_API_URL` if you need the UI to reach the
+API somewhere other than `localhost:8000`.
+
+Without `make` (Windows, or no GNU make installed):
+
+```bash
+pip install -e ".[dev]" fastapi "uvicorn[standard]" python-multipart httpx
+cd web && npm install && cd ..
+uvicorn api.main:app --reload --port 8000     # terminal 1
+cd web && npm run dev                         # terminal 2
+```
+
+Confirm it is up without touching the UI:
+
+```bash
+curl http://localhost:8000/health      # {"status":"ok","model_loaded":true}
+exo eval                               # prints the stored held-out metrics
+```
+
+Or run the whole stack in containers with `docker compose up --build`.
+
+### Regenerating the model
+
+Only needed to reproduce the artifacts rather than use the committed ones:
+
+```bash
+exo ingest              # NASA archive -> data/raw/, recording query + timestamp
+exo train --trials 40   # ~25 min, CPU only  (exo train --fast skips Optuna, ~6 min)
+```
+
+`exo train` rewrites `models/production/model.joblib`,
+`docs/metrics/metrics.json`, the three figures, and `top_candidates.csv`, and
+prints the generalisation gap and leakage-guard verdict as it goes.
+
+### Checks
+
+```bash
+make test        # pytest (offline, against committed fixtures) + vitest
+make lint        # ruff, mypy, eslint
+```
 
 ## Layout
 
@@ -164,7 +239,7 @@ ml/exodiscover/    ingest · leakage firewall · physics features · training ·
 api/               FastAPI: typed prediction, batch CSV, SHAP, metrics
 web/               React UI — every screen calls the API, no mock data
 docs/              LEAKAGE.md · MODEL_CARD.md · metrics/
-tests/             80 tests, offline against committed fixtures
+tests/             109 tests, offline against committed fixtures
 ```
 
 **Start with [`docs/LEAKAGE.md`](docs/LEAKAGE.md)** — it is the substance of the

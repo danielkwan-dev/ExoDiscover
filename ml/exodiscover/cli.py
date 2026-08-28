@@ -27,7 +27,7 @@ from exodiscover.evaluate import (
     reliability_curve,
     write_metrics,
 )
-from exodiscover.experiments import ablation, transfer
+from exodiscover.experiments import ablation, overfit, transfer
 from exodiscover.explain import global_importance
 from exodiscover.features.tabular import FEATURE_COLUMNS, add_multiplicity, build_features
 from exodiscover.models import train as train_mod
@@ -111,6 +111,19 @@ def train_cmd(
         f"sigmoid {calibration['brier_by_method']['sigmoid']:.4f})"
     )
 
+    # Overfitting is a gap, not a level. Measure it on the uncalibrated
+    # estimator: the calibration wrapper is fitted on a slice of the training
+    # data, so scoring it against that same data would understate the gap.
+    train_groups = groups.loc[X_tr.index]
+    gap = overfit.generalisation_gap(estimator, X_tr, y_tr, X_te, y_te)
+    curve = overfit.learning_curve(estimator, X_tr, y_tr, train_groups, X_te, y_te)
+    verdict = "OVERFIT" if gap["overfit"] else "generalises"
+    typer.echo(
+        f"generalisation: train {gap['train_roc_auc']:.4f} vs "
+        f"held-out {gap['test_roc_auc']:.4f} "
+        f"(gap {gap['gap']:.4f}, threshold {gap['threshold']:.2f}) -> {verdict}"
+    )
+
     test_metrics = evaluate_binary(model, X_te, y_te)
     y_prob = model.predict_proba(X_te)[:, 1]
     test_metrics["ci95"] = bootstrap_ci(y_te, y_prob, groups.loc[X_te.index])
@@ -153,9 +166,16 @@ def train_cmd(
             "trained_at": datetime.now(UTC).isoformat(),
             "framing": "binary",
             "tuned": not fast,
+            "test_size": settings.test_size,
             "n_train_rows": int(len(X_tr)),
-            "n_train_stars": int(groups.loc[X_tr.index].nunique()),
+            "n_train_stars": int(train_groups.nunique()),
+            "n_test_rows": int(len(X_te)),
+            "n_test_stars": int(groups.loc[X_te.index].nunique()),
         },
+        # Answers "is 0.98 too good to be true" with measurements rather than
+        # assertion: the train-minus-held-out gap, and whether the score
+        # survives training on a fraction of the stars.
+        "overfitting": {"gap": gap, "learning_curve": curve},
         "features": FEATURE_COLUMNS,
         "test": test_metrics,
         "cv": best.cv_scores,

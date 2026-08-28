@@ -8,7 +8,9 @@ of index pairs and passed as ``cv``, which keeps the grouping guarantee intact.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
+from typing import Any
 
 import numpy as np
 import optuna
@@ -21,7 +23,13 @@ from sklearn.model_selection import cross_validate
 
 from exodiscover.config import settings
 from exodiscover.data.splits import grouped_train_test_split, make_cv
-from exodiscover.models.registry import TUNABLE, candidates, ensembles
+from exodiscover.models.registry import (
+    TUNABLE,
+    candidates,
+    ensembles,
+    final_estimator,
+    param_prefix,
+)
 
 SCORING = {
     "pr_auc": "average_precision",
@@ -91,7 +99,14 @@ def tune_best(
         return base
 
     optuna.logging.set_verbosity(optuna.logging.WARNING)
-    tunable_params = set(base.get_params())
+    # Address the learner's own parameters. Where a pipeline wraps it, every
+    # name is prefixed, so matching the bare names against the pipeline's
+    # parameter set would quietly match nothing and "tune" the default model.
+    tunable_params = set(final_estimator(base).get_params())
+    prefix = param_prefix(base)
+
+    def _applicable(proposed: Mapping[str, Any]) -> dict[str, Any]:
+        return {f"{prefix}{k}": v for k, v in proposed.items() if k in tunable_params}
 
     def objective(trial: optuna.Trial) -> float:
         proposed = {
@@ -102,7 +117,7 @@ def tune_best(
             "iterations": trial.suggest_int("iterations", 200, 800, step=100),
         }
         est = clone(base)
-        est.set_params(**{k: v for k, v in proposed.items() if k in tunable_params})
+        est.set_params(**_applicable(proposed))
         return _score(est, X, y, groups)["pr_auc"]
 
     study = optuna.create_study(
@@ -112,7 +127,7 @@ def tune_best(
     study.optimize(objective, n_trials=n_trials, show_progress_bar=False)
 
     best = clone(base)
-    best.set_params(**{k: v for k, v in study.best_params.items() if k in tunable_params})
+    best.set_params(**_applicable(study.best_params))
     return best
 
 

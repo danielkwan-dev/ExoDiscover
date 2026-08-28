@@ -17,9 +17,25 @@ def test_registry_contains_the_full_ladder():
 
 
 def test_registry_is_deterministic():
-    a = registry.candidates(seed=42)["random_forest"].get_params()["random_state"]
-    b = registry.candidates(seed=42)["random_forest"].get_params()["random_state"]
-    assert a == b == 42
+    a = registry.final_estimator(registry.candidates(seed=42)["random_forest"])
+    b = registry.final_estimator(registry.candidates(seed=42)["random_forest"])
+    assert a.get_params()["random_state"] == b.get_params()["random_state"] == 42
+
+
+def test_tuning_reaches_parameters_through_a_pipeline(koi_binary):
+    """Optuna must tune the estimator even when an imputer wraps it.
+
+    A pipeline renames every parameter to `clf__*`. The search proposes bare
+    names, so filtering them against the pipeline's own parameter set silently
+    matched nothing and returned the untuned model while still reporting a
+    tuned score.
+    """
+    X, y, groups = koi_binary
+    tuned = train.tune_best(X, y, groups, "random_forest", n_trials=2)
+    baseline = registry.final_estimator(registry.candidates(42)["random_forest"])
+    assert registry.final_estimator(tuned).get_params()["max_depth"] != (
+        baseline.get_params()["max_depth"]
+    )
 
 
 def test_fit_candidates_beats_the_dummy_baseline(koi_binary):

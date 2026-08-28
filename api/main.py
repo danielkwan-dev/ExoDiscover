@@ -26,6 +26,7 @@ from api.schemas import (
 from api.service import service
 from exodiscover.config import settings
 from exodiscover.features import lightcurve as lc
+from exodiscover.features.tabular import MULTIPLICITY_COLUMN
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger("exodiscover.api")
@@ -104,11 +105,13 @@ def discoveries(limit: int = 25) -> dict:
 def predict(payload: KOIInput) -> dict:
     _require_model()
     row = payload.model_dump()
-    # build_features derives multiplicity from kepid; the caller supplies the
-    # count directly, so synthesise a frame that reproduces it.
-    count = int(row.pop("n_kois_on_star", 1))
-    frame = pd.DataFrame([{**row, "kepid": 1}] * count)
-    return service.predict_frame(frame)[0]
+    # The caller states the multiplicity directly, so hand it to the feature
+    # builder under the name it expects. This used to be expressed by repeating
+    # the row `count` times and letting a per-frame groupby recover the number,
+    # which scored N identical rows to answer one question and relied on the
+    # batch-dependent counting that build_features no longer does.
+    row[MULTIPLICITY_COLUMN] = float(row.pop("n_kois_on_star", 1))
+    return service.predict_frame(pd.DataFrame([row]))[0]
 
 
 @app.post("/predict/batch", response_model=BatchResponse, tags=["predict"])

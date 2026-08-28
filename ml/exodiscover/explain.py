@@ -19,10 +19,16 @@ from sklearn.pipeline import Pipeline
 
 
 class Contribution(TypedDict):
-    """One feature's signed contribution to a single prediction."""
+    """One feature's signed contribution to a single prediction.
+
+    ``value`` is None when the caller did not supply that input. The model
+    still scores the row -- the boosted families route NaN down a learned
+    branch -- so reporting null is the honest answer, where a number would
+    claim a measurement nobody made.
+    """
 
     feature: str
-    value: float
+    value: float | None
     shap: float
 
 
@@ -82,9 +88,15 @@ def global_importance(model, X: pd.DataFrame) -> list[Importance]:
     return sorted(rows, key=lambda r: r["mean_abs_shap"], reverse=True)
 
 
+def _json_safe(value: float) -> float | None:
+    """NaN is not representable in JSON; None is."""
+    number = float(value)
+    return None if np.isnan(number) else number
+
+
 def _row_contributions(columns, values, row: pd.Series, top_n: int) -> list[Contribution]:
     rows: list[Contribution] = [
-        {"feature": str(f), "value": float(row[f]), "shap": float(s)}
+        {"feature": str(f), "value": _json_safe(row[f]), "shap": float(s)}
         for f, s in zip(columns, values, strict=True)
     ]
     return sorted(rows, key=lambda r: abs(r["shap"]), reverse=True)[:top_n]

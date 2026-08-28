@@ -1,7 +1,9 @@
 import numpy as np
 import pandas as pd
+import pytest
 
-from exodiscover.experiments import ablation, transfer
+from exodiscover.data.splits import grouped_train_test_split
+from exodiscover.experiments import ablation, overfit, transfer
 from exodiscover.features.tabular import FEATURE_COLUMNS
 
 
@@ -35,6 +37,46 @@ def test_framing_ablation_reports_all_three_framings(koi_sample):
     for row in rows:
         assert 0.0 <= row["pr_auc"] <= 1.0
         assert row["target"]
+
+
+def test_generalisation_gap_reports_both_sides(koi_binary):
+    """The overfitting question is train-minus-test, not the size of test."""
+    X, y, groups = koi_binary
+    X_tr, X_te, y_tr, y_te = grouped_train_test_split(X, y, groups)
+    result = overfit.generalisation_gap(overfit.default_model(), X_tr, y_tr, X_te, y_te)
+
+    assert result["train_roc_auc"] >= result["test_roc_auc"]
+    assert result["gap"] == pytest.approx(
+        result["train_roc_auc"] - result["test_roc_auc"]
+    )
+    assert result["overfit"] is (result["gap"] > overfit.OVERFIT_GAP)
+
+
+def test_learning_curve_is_ordered_and_grows_with_data(koi_binary):
+    X, y, groups = koi_binary
+    X_tr, X_te, y_tr, y_te = grouped_train_test_split(X, y, groups)
+    rows = overfit.learning_curve(
+        overfit.default_model(), X_tr, y_tr, groups.loc[X_tr.index], X_te, y_te
+    )
+
+    fractions = [r["fraction"] for r in rows]
+    assert fractions == sorted(fractions)
+    assert rows[-1]["n_train_rows"] > rows[0]["n_train_rows"]
+    assert all(0.0 <= r["roc_auc"] <= 1.0 for r in rows)
+
+
+def test_learning_curve_holds_out_the_same_rows_throughout(koi_binary):
+    """Every point must be measured against one fixed held-out set.
+
+    A curve whose test set moves between points measures two things at once
+    and cannot show whether more training data helped.
+    """
+    X, y, groups = koi_binary
+    X_tr, X_te, y_tr, y_te = grouped_train_test_split(X, y, groups)
+    rows = overfit.learning_curve(
+        overfit.default_model(), X_tr, y_tr, groups.loc[X_tr.index], X_te, y_te
+    )
+    assert {r["n_test_rows"] for r in rows} == {len(y_te)}
 
 
 def test_shared_features_are_a_subset_of_the_kepler_features():

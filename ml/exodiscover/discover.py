@@ -34,8 +34,17 @@ def _ranking_score(model, X: pd.DataFrame) -> np.ndarray:
 
 
 def _format_reasons(contributions: list[Contribution]) -> str:
+    """Render contributions for the shortlist CSV.
+
+    A feature the catalog never measured reads as "missing" rather than as a
+    number, because the model does draw on the absence itself: a KOI with no
+    pipeline fit is almost never a planet.
+    """
     return "; ".join(
-        f"{c['feature']}={c['value']:.3g} ({c['shap']:+.3f})" for c in contributions
+        f"{c['feature']}="
+        f"{'missing' if c['value'] is None else format(c['value'], '.3g')}"
+        f" ({c['shap']:+.3f})"
+        for c in contributions
     )
 
 

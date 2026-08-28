@@ -38,27 +38,41 @@ def tracked_files() -> set[str]:
     return set(output.splitlines())
 
 
-def test_every_source_file_is_tracked(tracked_files: set[str]) -> None:
-    """Every .py file under the source roots must be in the index.
-
-    A file that is present on disk but absent from git is invisible to every
-    other test in this suite, because they all import from the working tree.
-    """
-    untracked: list[str] = []
+def _source_files() -> list[str]:
+    paths: list[str] = []
     for root in SOURCE_ROOTS:
         for path in sorted((REPO_ROOT / root).rglob("*.py")):
             if "__pycache__" in path.parts or ".egg-info" in str(path):
                 continue
-            relative = path.relative_to(REPO_ROOT).as_posix()
-            if relative not in tracked_files:
-                untracked.append(relative)
+            paths.append(path.relative_to(REPO_ROOT).as_posix())
+    return paths
 
-    assert not untracked, (
-        "source files exist on disk but are not tracked by git, so a fresh "
-        "clone would not contain them:\n  "
-        + "\n  ".join(untracked)
-        + "\n\nCheck .gitignore for an unanchored pattern; `git check-ignore -v "
-        "<path>` names the offending line."
+
+def test_no_source_file_is_hidden_by_gitignore() -> None:
+    """No .py file under the source roots may match an ignore rule.
+
+    This is the precise failure mode, and it is worth stating precisely: a file
+    that is merely untracked is one `git add` from being committed and shows up
+    in `git status`, whereas a file matched by .gitignore is invisible there and
+    cannot be added without `-f`. That is how ml/exodiscover/data/ stayed out of
+    six consecutive commits while every local check passed.
+    """
+    sources = _source_files()
+    assert sources, "no source files found; SOURCE_ROOTS is probably wrong"
+
+    # check-ignore exits 1 when nothing matches, which is the healthy case.
+    proc = subprocess.run(
+        ["git", "check-ignore", "--stdin", "--verbose"],
+        cwd=REPO_ROOT,
+        input="\n".join(sources),
+        capture_output=True,
+        text=True,
+    )
+    ignored = [line for line in proc.stdout.splitlines() if line.strip()]
+    assert not ignored, (
+        "source files are matched by .gitignore, so a fresh clone would not "
+        "contain them. Each line names the offending rule:\n  "
+        + "\n  ".join(ignored)
     )
 
 

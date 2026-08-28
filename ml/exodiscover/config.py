@@ -15,6 +15,10 @@ class Settings(BaseSettings):
     root: Path = Path(__file__).resolve().parents[2]
     random_seed: int = 42
     cv_folds: int = 5
+    #: Fraction of host stars held out of training entirely. Model selection
+    #: and tuning run on the 70% via grouped CV; the 30% is touched once, to
+    #: produce the reported numbers.
+    test_size: float = 0.3
 
     @property
     def data_dir(self) -> Path:
