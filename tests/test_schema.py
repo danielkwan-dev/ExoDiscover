@@ -4,11 +4,15 @@ import pytest
 from exodiscover.data.schema import (
     KOI_LABEL_MAP,
     LEAKY_COLUMNS,
+    MAX_LEAK_CORRELATION,
     TOI_LABEL_MAP,
     TOI_RESOLVED,
     LeakageError,
+    assert_no_derived_leakage,
     assert_no_leakage,
+    find_derived_leakage,
 )
+from exodiscover.features.tabular import build_features
 
 
 def test_known_leaky_columns_are_listed():
@@ -37,6 +41,45 @@ def test_assert_no_leakage_raises_and_names_every_offender():
     assert "koi_score" in message
     assert "koi_fpflag_ss" in message
     assert "feature matrix" in message
+
+
+def test_name_check_cannot_see_a_renamed_leaky_column():
+    """States the limit the value check exists to cover.
+
+    assert_no_leakage compares column names, so a Robovetter column shipped
+    under any other name passes it untouched.
+    """
+    df = pd.DataFrame({"koi_period": [1.0, 2.0], "vetting_confidence": [0.9, 0.1]})
+    assert_no_leakage(df)  # passes, and should not
+
+
+def test_derived_leakage_is_caught_when_a_leaky_column_is_renamed(koi_sample):
+    X = build_features(koi_sample)
+    X["vetting_confidence"] = pd.to_numeric(koi_sample["koi_score"], errors="coerce")
+
+    with pytest.raises(LeakageError) as exc:
+        assert_no_derived_leakage(X, koi_sample, context="feature matrix")
+
+    message = str(exc.value)
+    assert "vetting_confidence" in message
+    assert "koi_score" in message
+    assert "feature matrix" in message
+
+
+def test_derived_leakage_survives_dilution(koi_sample):
+    """A leak does not have to be a clean copy to be a leak."""
+    X = build_features(koi_sample)
+    score = pd.to_numeric(koi_sample["koi_score"], errors="coerce")
+    X["diluted"] = score * 0.5 + X["log_prad"] * 0.01
+
+    offenders = find_derived_leakage(X, koi_sample)
+    assert any(feature == "diluted" for feature, _, _ in offenders)
+
+
+def test_the_shipped_feature_matrix_has_no_derived_leakage(koi_sample):
+    """The real guard: every feature that actually ships must pass."""
+    offenders = find_derived_leakage(build_features(koi_sample), koi_sample)
+    assert offenders == [], f"above {MAX_LEAK_CORRELATION}: {offenders}"
 
 
 def test_toi_known_planet_maps_to_confirmed():

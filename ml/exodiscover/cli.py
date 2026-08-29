@@ -18,6 +18,7 @@ import typer
 
 from exodiscover.config import settings
 from exodiscover.data import ingest
+from exodiscover.data.schema import assert_no_derived_leakage
 from exodiscover.data.splits import grouped_train_test_split
 from exodiscover.discover import rank_candidates
 from exodiscover.evaluate import (
@@ -72,6 +73,11 @@ def train_cmd(
     X = build_features(binary)
     y = (binary["koi_disposition"] == "CONFIRMED").astype(int)
     groups = binary["kepid"]
+
+    # build_features drops the Robovetter columns by name, which cannot see one
+    # that arrived under a different name. Audit the values once, here, against
+    # the raw frame that still carries them.
+    assert_no_derived_leakage(X, binary)
 
     typer.echo(f"training on {len(X)} KOIs across {groups.nunique()} stars")
 

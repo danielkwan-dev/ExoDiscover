@@ -16,7 +16,11 @@ from sklearn.model_selection import train_test_split
 from exodiscover.config import settings
 from exodiscover.data.splits import grouped_train_test_split
 from exodiscover.evaluate import binary_scores, precision_at_k
-from exodiscover.features.tabular import build_features
+from exodiscover.features.tabular import (
+    MULTIPLICITY_COLUMN,
+    add_multiplicity,
+    build_features,
+)
 
 #: The Robovetter's own verdict columns, re-added only to measure their effect.
 LEAKY_EXTRAS = [
@@ -36,6 +40,39 @@ def collapse_to_planetlike(y: np.ndarray) -> np.ndarray:
     binary framings comparable.
     """
     return (np.asarray(y) > 0).astype(int)
+
+
+def with_multiplicity(koi: pd.DataFrame) -> pd.DataFrame:
+    """Attach the per-star KOI count unless the caller already has.
+
+    Counting must happen over the whole catalog and before any label filter, so
+    a caller that has done it properly -- `exo train` reads the catalog through
+    add_multiplicity -- keeps its own count rather than having it recomputed
+    over whatever subset arrives here.
+    """
+    return koi if MULTIPLICITY_COLUMN in koi.columns else add_multiplicity(koi)
+
+
+def prepare_features(frame: pd.DataFrame) -> pd.DataFrame:
+    """Build features for an ablation, refusing a matrix with an empty column.
+
+    build_features leaves missing inputs as NaN rather than inventing values,
+    which means a column absent from the source frame arrives entirely empty.
+    That is always a caller error, and it surfaces a long way from its cause:
+    HistGradientBoosting's binner needs two distinct values and otherwise
+    raises "window shape cannot be larger than input array shape" from inside
+    numpy's stride tricks. Naming the column here is cheaper than tracing that.
+    """
+    X = build_features(frame)
+    empty = [column for column in X.columns if X[column].notna().sum() == 0]
+    if empty:
+        raise ValueError(
+            f"feature(s) {', '.join(empty)} are entirely missing for these "
+            f"{len(X)} rows, so no model can bin them. The source frame is "
+            "missing the columns they derive from, or the per-star count was "
+            "never attached -- see with_multiplicity."
+        )
+    return X
 
 
 def _model() -> HistGradientBoostingClassifier:
@@ -61,8 +98,9 @@ def _fit_score(X_tr, X_te, y_tr, y_te) -> dict[str, float]:
 
 def run_leakage_ablation(koi: pd.DataFrame) -> list[dict]:
     """Three setups, one variable changed at a time."""
+    koi = with_multiplicity(koi)
     df, y = _binary_frame(koi)
-    clean = build_features(df)
+    clean = prepare_features(df)
 
     leaky = clean.copy()
     for col in LEAKY_EXTRAS:
@@ -109,13 +147,14 @@ def run_leakage_ablation(koi: pd.DataFrame) -> list[dict]:
 
 def run_framing_ablation(koi: pd.DataFrame) -> list[dict]:
     """Score all three task framings on the planet-like decision."""
+    koi = with_multiplicity(koi)
     rows: list[dict] = []
 
     # A: flat three-class, collapsed at inference so it is comparable.
     df3 = koi[koi["koi_disposition"].isin(["CONFIRMED", "CANDIDATE", "FALSE POSITIVE"])]
     df3 = df3.reset_index(drop=True)
     y3 = df3["koi_disposition"].map({"FALSE POSITIVE": 0, "CANDIDATE": 1, "CONFIRMED": 2})
-    X3 = build_features(df3)
+    X3 = prepare_features(df3)
     X_tr, X_te, y_tr, y_te = grouped_train_test_split(X3, y3, df3["kepid"])
     model = _model().fit(X_tr, y_tr)
     prob_planetlike = model.predict_proba(X_te)[:, 1:].sum(axis=1)
@@ -130,7 +169,7 @@ def run_framing_ablation(koi: pd.DataFrame) -> list[dict]:
 
     # B: binary confirmed vs false positive; candidates withheld for discovery.
     dfb, yb = _binary_frame(koi)
-    Xb = build_features(dfb)
+    Xb = prepare_features(dfb)
     X_tr, X_te, y_tr, y_te = grouped_train_test_split(Xb, yb, dfb["kepid"])
     model = _model().fit(X_tr, y_tr)
     rows.append(
@@ -147,7 +186,7 @@ def run_framing_ablation(koi: pd.DataFrame) -> list[dict]:
     # selection rather than physics.
     dfd = koi[koi["koi_disposition"].isin(["CONFIRMED", "CANDIDATE"])].reset_index(drop=True)
     yd = (dfd["koi_disposition"] == "CONFIRMED").astype(int)
-    Xd = build_features(dfd)
+    Xd = prepare_features(dfd)
     X_tr, X_te, y_tr, y_te = grouped_train_test_split(Xd, yd, dfd["kepid"])
     model = _model().fit(X_tr, y_tr)
     rows.append(

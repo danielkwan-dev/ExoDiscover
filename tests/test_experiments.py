@@ -39,6 +39,27 @@ def test_framing_ablation_reports_all_three_framings(koi_sample):
         assert row["target"]
 
 
+def test_ablation_attaches_multiplicity_to_a_raw_frame(koi_sample):
+    """The ablations are handed the catalog directly, not a prepared frame.
+
+    build_features deliberately will not count KOIs per star itself, because
+    counting inside a frame makes a row's features depend on its batch. If the
+    caller has not attached the count, n_kois_on_star comes out entirely NaN --
+    and HistGradientBoosting cannot bin a column with no distinct values. It
+    fails with "window shape cannot be larger than input array shape" from
+    inside numpy, which names neither the column nor the cause.
+    """
+    X = ablation.prepare_features(ablation.with_multiplicity(koi_sample))
+    assert X["n_kois_on_star"].notna().all()
+
+
+def test_prepare_features_rejects_a_wholly_missing_column(koi_sample):
+    """An empty feature column is a caller error, and should say so."""
+    without_radius = koi_sample.drop(columns=["koi_prad"])
+    with pytest.raises(ValueError, match="log_prad"):
+        ablation.prepare_features(ablation.with_multiplicity(without_radius))
+
+
 def test_generalisation_gap_reports_both_sides(koi_binary):
     """The overfitting question is train-minus-test, not the size of test."""
     X, y, groups = koi_binary
