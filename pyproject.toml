@@ -3,25 +3,35 @@ name = "exodiscover"
 version = "0.1.0"
 description = "Leakage-free exoplanet classification over NASA Kepler, TESS, and K2 catalogs."
 requires-python = ">=3.11,<3.13"
+# Upper bounds are deliberate. With lower bounds alone, CI resolved a newer
+# scikit-learn than any developer had installed, and its histogram binner began
+# raising on an all-NaN column that 1.7 tolerated -- so the suite passed on
+# every laptop and failed only on push, twice, on a defect no one could
+# reproduce. Ceilings sit one minor above the last version actually tested;
+# raise them deliberately and re-run, rather than discovering the bump in CI.
 dependencies = [
-  "pandas>=2.2",
-  "numpy>=1.26",
-  "scipy>=1.11",
-  "scikit-learn>=1.5",
-  "xgboost>=2.1",
-  "lightgbm>=4.5",
-  "catboost>=1.2",
-  "optuna>=4.0",
-  "shap>=0.46",
-  "matplotlib>=3.9",
-  "typer>=0.12",
-  "pydantic-settings>=2.4",
-  "requests>=2.32",
-  "joblib>=1.4",
+  "pandas>=2.2,<3",
+  "numpy>=1.26,<3",
+  "scipy>=1.11,<2",
+  "scikit-learn>=1.5,<1.8",
+  "xgboost>=2.1,<4",
+  "lightgbm>=4.5,<5",
+  "catboost>=1.2,<2",
+  "optuna>=4.0,<5",
+  # shap is pre-1.0; its minor releases have changed the TreeExplainer return
+  # shape before, which explain.py already normalises across two API eras.
+  "shap>=0.46,<0.52",
+  "matplotlib>=3.9,<4",
+  "typer>=0.12,<1",
+  "pydantic-settings>=2.4,<3",
+  "requests>=2.32,<3",
+  "joblib>=1.4,<2",
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8.3", "pytest-cov>=5.0", "ruff>=0.6", "mypy>=1.11"]
+# ruff gains lint rules on minor bumps, which turns an unpinned ceiling into a
+# CI failure on code that has not changed.
+dev = ["pytest>=8.3,<9", "pytest-cov>=5.0,<8", "ruff>=0.6,<0.17", "mypy>=1.11,<2"]
 
 [project.scripts]
 exo = "exodiscover.cli:app"

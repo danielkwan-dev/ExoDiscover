@@ -29,6 +29,18 @@ from sklearn.metrics import (  # noqa: E402
 
 from exodiscover.config import settings  # noqa: E402
 
+#: One accent hue for the single data series; everything else is recessive ink,
+#: so text never carries the series colour and the grid never competes with it.
+ACCENT = "#4f46e5"
+REFERENCE_INK = "#9ca3af"
+GRID_INK = "#d1d5db"
+LABEL_INK = "#6b7280"
+
+#: Reliability markers scale with bin population. The floor keeps a two-row bin
+#: on the page; the range is what separates it from a twelve-hundred-row one.
+MIN_MARKER_AREA = 18.0
+MARKER_AREA_RANGE = 360.0
+
 
 def precision_at_k(y_true: np.ndarray, y_prob: np.ndarray, k: int = 50) -> float:
     """Fraction of the k highest-ranked items that are true positives.
@@ -152,13 +164,48 @@ def plot_all(y_true, y_prob, out_dir: Path) -> list[Path]:
     written.append(path)
 
     curve = reliability_curve(y_true, y_prob)
-    fig, ax = plt.subplots(figsize=(5, 4))
-    ax.plot([0, 1], [0, 1], "--", color="grey", lw=1, label="perfect")
-    ax.plot(curve["bin_centers"], curve["observed"], marker="o", color="#4f46e5")
+    centers = np.asarray(curve["bin_centers"])
+    observed = np.asarray(curve["observed"])
+    counts = np.asarray(curve["counts"], dtype=float)
+
+    fig, ax = plt.subplots(figsize=(5.4, 4.2))
+    ax.plot([0, 1], [0, 1], "--", color=REFERENCE_INK, lw=1, label="perfect", zorder=1)
+    ax.plot(centers, observed, color=ACCENT, lw=1.5, zorder=2)
+
+    # Marker area tracks how many rows the bin holds. Drawn at a fixed size, a
+    # bin of 2 claims exactly as much authority as a bin of 1,285, and the eye
+    # reads the noisiest points as findings. The floor keeps a tiny bin visible
+    # rather than proportional, so the count is printed beside every marker.
+    ax.scatter(
+        centers,
+        observed,
+        s=MIN_MARKER_AREA + MARKER_AREA_RANGE * counts / counts.max(),
+        color=ACCENT,
+        edgecolor="white",
+        linewidth=0.8,
+        zorder=3,
+    )
+    for x, y, n in zip(centers, observed, counts, strict=True):
+        ax.annotate(
+            f"n={int(n)}",
+            (x, y),
+            textcoords="offset points",
+            xytext=(0, -14),
+            ha="center",
+            fontsize=7,
+            color=LABEL_INK,
+        )
+
     ax.set_xlabel("predicted probability")
     ax.set_ylabel("observed frequency")
     ax.set_title("Calibration")
-    ax.legend(loc="upper left", fontsize=8)
+    # Room below zero and beside one so the count labels on the end bins, which
+    # sit hard against the corners, are not clipped by the axes.
+    ax.set_xlim(-0.06, 1.06)
+    ax.set_ylim(-0.12, 1.08)
+    ax.grid(True, lw=0.5, color=GRID_INK, alpha=0.6)
+    ax.set_axisbelow(True)
+    ax.legend(loc="upper left", fontsize=8, frameon=False)
     path = out_dir / "reliability.png"
     fig.savefig(path, dpi=150, bbox_inches="tight")
     plt.close(fig)
