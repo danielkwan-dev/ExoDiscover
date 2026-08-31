@@ -32,6 +32,36 @@ dropped on the way into `build_features` and asserted absent on the way out.
 `tests/test_schema.py` and `tests/test_features.py` fail the build if one ever
 reaches the feature matrix.
 
+### Two guards, because a name check is not enough
+
+`assert_no_leakage` compares column *names*. That catches the original defect —
+hand-picked feature lists containing `koi_score` — and nothing subtler. It
+cannot see a leaky column that arrives under a different name, and since
+`build_features` restricts its output to `FEATURE_COLUMNS`, it can only ever
+fire there if that list itself is edited. A guard that can only catch the
+mistake you already know about is worth stating honestly rather than trusting.
+
+So a second guard reads the *values*. `find_derived_leakage` measures rank
+correlation between every shipped feature and every Robovetter column, and the
+threshold comes from measurement rather than taste:
+
+| | \|Spearman\| vs `koi_score` |
+|---|---|
+| Strongest *legitimate* pairing (`log_prad` vs `koi_fpflag_ss`) | 0.553 |
+| **Threshold** | **0.80** |
+| `koi_score` shipped under another name | 1.000 |
+| `koi_score` halved and mixed with noise | 0.885 |
+
+That 0.553 is not leakage: eclipsing binaries are both large and flagged as
+such, so the physics and the vetting flag agree without either causing the
+other. The threshold sits clear above it and below a diluted leak.
+
+Spearman rather than Pearson, deliberately — a leak reintroduced through a log,
+a rescaling, or a rank is still a leak, and rank correlation is blind to the
+transform in a way Pearson is not. It runs once per training run against the
+raw catalog, not on the serving path, where it would cost a correlation per
+feature per request and need many rows to mean anything.
+
 ## 2. Split leakage — smaller than expected
 
 Kepler lists 9,564 KOIs across only 8,214 stars, up to seven on one star.

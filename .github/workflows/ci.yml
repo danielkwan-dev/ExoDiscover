@@ -15,7 +15,7 @@ jobs:
           python-version: "3.11"
           cache: pip
       - name: Install
-        run: pip install -e ".[dev]" fastapi "uvicorn[standard]" python-multipart httpx
+        run: pip install -e ".[dev,api]"
       - name: Lint
         run: ruff check .
       - name: Type check

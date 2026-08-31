@@ -1,6 +1,6 @@
 .PHONY: install ingest train eval test lint serve web docker
 install:
-	pip install -e ".[dev]" fastapi "uvicorn[standard]" python-multipart httpx
+	pip install -e ".[dev,api]"
 	cd web && npm install
 
 ingest:

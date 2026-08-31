@@ -35,6 +35,13 @@ They are now quarantined in one place, dropped on the way into feature
 construction and asserted absent on the way out, with a test that fails the
 build if one ever gets through.
 
+That check compares column *names*, which cannot catch a leaky column
+reintroduced under a different one — so a second guard reads the values,
+flagging any feature whose rank correlation with a Robovetter column exceeds
+0.80. The threshold is measured, not chosen: the strongest legitimate pairing
+in the catalog is 0.553, while `koi_score` renamed scores 1.000 and a diluted
+copy still scores 0.885.
+
 **Two more problems, found by measuring rather than assuming:**
 
 - Three uncertainty features I designed in myself turned out to encode *when a
@@ -181,7 +188,7 @@ anything** to see it working.
 **Prerequisites:** Python 3.11 or 3.12, Node 20+.
 
 ```bash
-make install     # pip install -e ".[dev]" + api deps, then npm install in web/
+make install     # pip install -e ".[dev,api]", then npm install in web/
 ```
 
 Then two terminals:
@@ -197,7 +204,7 @@ API somewhere other than `localhost:8000`.
 Without `make` (Windows, or no GNU make installed):
 
 ```bash
-pip install -e ".[dev]" fastapi "uvicorn[standard]" python-multipart httpx
+pip install -e ".[dev,api]"
 cd web && npm install && cd ..
 uvicorn api.main:app --reload --port 8000     # terminal 1
 cd web && npm run dev                         # terminal 2
@@ -239,7 +246,7 @@ ml/exodiscover/    ingest · leakage firewall · physics features · training ·
 api/               FastAPI: typed prediction, batch CSV, SHAP, metrics
 web/               React UI — every screen calls the API, no mock data
 docs/              LEAKAGE.md · MODEL_CARD.md · metrics/
-tests/             109 tests, offline against committed fixtures
+tests/             115 tests, offline against committed fixtures
 ```
 
 **Start with [`docs/LEAKAGE.md`](docs/LEAKAGE.md)** — it is the substance of the

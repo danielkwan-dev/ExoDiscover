@@ -10,7 +10,7 @@ WORKDIR /app
 # Dependencies first, so a code change does not invalidate the install layer.
 COPY pyproject.toml ./
 COPY ml/ ./ml/
-RUN pip install --no-cache-dir -e "." fastapi "uvicorn[standard]" python-multipart
+RUN pip install --no-cache-dir -e ".[api]"
 
 COPY api/ ./api/
 # The trained artifact and its metrics are the only committed outputs.
