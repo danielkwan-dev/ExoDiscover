@@ -11,6 +11,8 @@ node_modules
 dist
 dist-ssr
 *.local
+# TypeScript incremental build cache; three of these were committed.
+*.tsbuildinfo
 
 # Editor directories and files
 .vscode/*
