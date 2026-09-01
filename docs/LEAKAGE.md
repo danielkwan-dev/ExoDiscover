@@ -62,6 +62,12 @@ transform in a way Pearson is not. It runs once per training run against the
 raw catalog, not on the serving path, where it would cost a correlation per
 feature per request and need many rows to mean anything.
 
+A third guard runs in CI, and it deliberately does **not** test a score against
+a fixed threshold — a clean number can legitimately be high, so a ceiling would
+fire on honest runs and stay silent on subtle leaks. It checks the shape of the
+table above instead: whether the clean pipeline has closed the gap on the
+deliberately-leaky one. That is what leakage would actually look like.
+
 ## 2. Split leakage — smaller than expected
 
 Kepler lists 9,564 KOIs across only 8,214 stars, up to seven on one star.
@@ -86,7 +92,7 @@ pairs. There is not enough overlap for the contamination to matter.
 Grouping is kept because it is the methodologically correct choice and it costs
 nothing — but the honest finding is that on this dataset it was not the problem.
 It would be the problem on the light-curve windows, where ~1,800 windows come
-from a handful of stars (see §5).
+from a handful of stars (see §4).
 
 ## 3. Temporal leakage — the subtle one
 
@@ -123,48 +129,7 @@ enough that keeping a feature I cannot defend was
 not worth it. `tests/test_features.py::test_uncertainty_features_stay_excluded`
 locks the decision in.
 
-## 4. Why 0.98 is real here, not a fourth leak
-
-The clean, grouped model scores 0.9839 ROC-AUC. That is high enough to be
-suspicious, so it was checked rather than reported.
-
-`log_prad` (planet radius) leads the SHAP ranking at 1.82 mean abs, ahead of
-`n_kois_on_star` (1.39), `duration_ratio` (1.23) and `koi_model_snr` (1.20). It
-turns out to be genuine physics:
-
-| Disposition | median radius | 90th pct | max |
-|---|---|---|---|
-| CONFIRMED | 2.16 R⊕ | 4.42 R⊕ | 77.8 R⊕ |
-| FALSE POSITIVE | 8.97 R⊕ | 82.97 R⊕ | **200,346 R⊕** |
-
-99.8% of objects implying a radius above 40 R⊕ are false positives. Nothing
-that large is a planet — those are eclipsing binaries and blended background
-stars being interpreted through a planetary transit model. Separating them is
-genuinely easy, and easy for the right reason.
-
-Two checks confirm it is not a single load-bearing artefact:
-
-- `log_prad` **alone** reaches only 0.8381 ROC-AUC.
-- **Removing** `log_prad` entirely leaves 0.9846 — the signal is redundantly
-  distributed across depth, duration consistency, and multiplicity.
-
-A third check answers the other thing a high score usually means. Overfitting is
-a gap, not a level: the model scores 0.9999 on the rows it trained on against
-0.9854 on held-out stars, a gap of **0.0145**. Trained on a tenth of the stars
-it still reaches 0.9764, and the learning curve is flat past half the data. Both
-figures are written to `docs/metrics/metrics.json` under `overfitting` by every
-run, so the claim is checkable rather than asserted.
-
-**The honest caveat:** this model is good at *planet vs eclipsing binary*. That
-is an easier question than the one the Robovetter faces on marginal signals,
-and the cross-mission result in §6 shows where the limits actually are.
-
-Because of this, the leakage guard in `cli.py` does **not** test accuracy
-against a fixed threshold — a real number can legitimately be high. It checks
-whether the clean pipeline has closed the gap on the deliberately-leaky one,
-which is what leakage would actually look like.
-
-## 5. The light-curve track cannot be evaluated
+## 4. The light-curve track cannot be evaluated
 
 The original CNN reported strong accuracy on 1,811 windows. Two defects make
 that number unrecoverable:
@@ -186,47 +151,25 @@ The preprocessing pipeline is retained as an explainer
 requires re-downloading light curves from MAST with identity preserved, which is
 outside this project's stated CPU budget.
 
-## 6. Task framing — settled by measurement
-
-The original predicts three classes. The concern was that CANDIDATE is not a
-physical category but a vetting state, so the CONFIRMED↔CANDIDATE boundary
-would encode follow-up selection rather than physics.
-
-All three framings, scored on the one decision they share — planet-like vs
-false positive, collapsing the 3-class output at inference:
-
-| Framing | ROC-AUC | PR-AUC | Brier |
-|---|---|---|---|
-| Binary (Confirmed vs FP) | **0.9840** | **0.9721** | **0.0427** |
-| Diagnostic (Confirmed vs Candidate) | 0.9411 | 0.9537 | 0.0941 |
-| Flat 3-class | 0.9201 | 0.9193 | 0.1171 |
-
-Binary wins decisively, so it ships. The diagnostic's SHAP breakdown (§3) is
-the more interesting result: the third class is separable, but substantially on
-parameter-refinement and selection terms rather than transit shape.
-
-**My original hypothesis was only partly right.** I predicted brightness and
-multiplicity would dominate that boundary. They contribute, but the dominant
-signal was measurement refinement — which is why §3 exists at all.
-
-## 7. Cross-mission generalisation — the real limit
+## 5. Cross-mission generalisation — the result
 
 Trained on Kepler, evaluated zero-shot on 2,562 resolved TESS objects using
 only features both catalogs express:
 
-| | n | Accuracy | Baseline | ROC-AUC | PR-AUC | Brier |
-|---|---|---|---|---|---|---|
-| Kepler (in-domain) | 2,298 | 0.9021 | 0.6314 | 0.9653 | 0.9345 | 0.0694 |
-| TESS (zero-shot) | 2,562 | **0.7697** | 0.5055 | **0.8376** | 0.8031 | **0.1771** |
+| | n | ROC-AUC | PR-AUC | Brier |
+|---|---|---|---|---|
+| Kepler (in-domain) | 2,298 | 0.9653 | 0.9345 | 0.0694 |
+| TESS (zero-shot) | 2,562 | **0.8376** | 0.8031 | **0.1771** |
 
-**Read the accuracies with their baselines or not at all.** Kepler's held-out
-slice is 63% false positives, so predicting the majority class scores 0.631
-before the model does anything; TESS is close to balanced, where the same
-strategy scores 0.506. The raw accuracy gap of 13 points is therefore part real
-degradation and part arithmetic — measured as lift over baseline the two are
-nearly identical, +27.1 against +26.4.
+**Zero-shot accuracy on TESS is 0.7697, against a majority-class baseline of
+0.5055.** That is the one accuracy this project quotes, because it is the one
+measured on a near-balanced population where the number carries information.
+Accuracy is not used for the in-domain comparison: Kepler's held-out slice is
+63% false positives, so the baseline alone is 0.631 and the two figures would
+not be comparable — the gap between them would be part real degradation and
+part arithmetic. ROC-AUC is base-rate free, so the comparison uses it.
 
-The base-rate-free comparison is ROC-AUC, and it falls by 0.128. The Brier score
+Measured that way, performance falls by 0.128. The Brier score
 more than doubles. **The ranking largely survives the domain shift; the
 calibration does not** — probabilities that are trustworthy on Kepler are not
 trustworthy on TESS. TESS has shorter baselines, a redder bandpass, larger
@@ -239,32 +182,18 @@ Letting them stay missing, for the boosted models to route down a learned
 branch, moved zero-shot ROC-AUC from 0.7619 to 0.8376 with no change to the
 model itself. Imputing across a domain boundary was quietly costing 0.076.
 
-This is the number that says what the model can actually do on new data, and it
-is much less flattering than 0.98. It is reported first in the model card for
-that reason.
+This is the number that says what the model can actually do on data this project
+did not train on, which is why it is the one reported.
 
 ---
 
-## 8. How certain are these numbers?
+## 6. How certain are these numbers?
 
-Every comparison above is between figures with real uncertainty, so the
-uncertainty is measured rather than left implicit.
-
-**Fold-to-fold spread** accompanies each cross-validated score. The top five
-families span 0.0030 PR-AUC while their individual standard deviations run
-0.0053–0.0064 — the ordering among them carries no information. Optuna's
-40-trial search moved the best tunable family a further 0.0002, well inside the
-band.
-
-**Confidence intervals** on the held-out metrics come from a bootstrap that
-resamples **host stars, not rows**, for the same reason the splits are grouped:
-sibling KOIs share stellar parameters and are not independent draws, so a row
-bootstrap reports an interval narrower than the data supports.
-
-| Metric | Value | 95% CI |
-|---|---|---|
-| ROC-AUC | 0.9839 | 0.9792 – 0.9879 |
-| PR-AUC | 0.9666 | 0.9551 – 0.9757 |
+**Confidence intervals** come from a bootstrap that resamples **host stars, not
+rows**, for the same reason the splits are grouped: sibling KOIs share stellar
+parameters and are not independent draws, so a row bootstrap reports an interval
+narrower than the data supports. Intervals for every reported metric are in
+`docs/metrics/metrics.json`.
 
 **Calibration involved a real trade**, not a default. Isotonic and sigmoid were
 both fitted and scored on a third, star-disjoint slice:
@@ -294,5 +223,4 @@ beyond the CPU budget. Recorded here rather than passed over.
 | Uncertainty features encoding follow-up | new design, caught and removed | −0.003, removed anyway |
 | Windows from ≤15 stars, identity lost | `create_training_data.py:21` | track dropped |
 | TESS `KP` mapped to Candidate | `preprocess_merge.py:149` | corrected; `APC`/`FA` no longer dropped |
-| Three-class framing | throughout | replaced by binary, 0.9201 → 0.9840 |
-| Batch-median imputation inside feature building | `build_features` | train/serve skew; TESS transfer 0.7619 → 0.8376 |
+| Batch-median imputation inside feature building | `build_features` | train/serve skew; **TESS transfer 0.7619 → 0.8376** |

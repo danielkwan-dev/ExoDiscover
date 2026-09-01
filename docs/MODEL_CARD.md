@@ -6,22 +6,18 @@ from Kepler transit parameters.
 
 ## Start here: what it can actually do
 
-**Trained on Kepler, tested on TESS.** On objects from a telescope it has never
-seen, the model reaches **77% accuracy against a 51% majority-class baseline**,
-**0.838 ROC-AUC**, and a Brier score of **0.177**. That is the number that
-describes its real-world use, and it is reported before the flattering one on
+**Trained on Kepler, tested on TESS.** On 2,562 resolved objects from a
+telescope it has never seen, the model reaches **77% accuracy against a 51%
+majority-class baseline**, **0.838 ROC-AUC**, and a Brier score of **0.177**.
+That is the number that describes its real-world use, and it is the headline on
 purpose.
 
-For comparison, restricted to the same 11 features both catalogs express, it
-reaches 90% accuracy and 0.965 ROC-AUC on held-out Kepler stars. Note the two
-accuracies are not directly comparable: Kepler's held-out slice is 63% false
-positives while TESS is nearly balanced, so the baselines differ by 12 points.
-The base-rate-free comparison is ROC-AUC, 0.965 → 0.838.
+The ranking survives the domain shift; the calibration does not. Measured on the
+11 features both catalogs express — TESS has no equivalent for Kepler-only
+quantities like signal-to-noise or KOI multiplicity.
 
-The model that ships uses all 17 features and reaches **0.984 ROC-AUC (95% CI
-0.979–0.988), 93.6% accuracy** on held-out Kepler. All three numbers are true;
-they measure different things, and the cross-mission one is the one that says
-what happens on data this project did not train on.
+In-domain Kepler results, and the ablations establishing that they are
+leakage-free, are in the Performance section below and in `LEAKAGE.md`.
 
 ## Intended use
 
@@ -70,71 +66,33 @@ post-confirmation parameter refinement. See `LEAKAGE.md`.
 
 ## Performance
 
-Held-out stars, n = 2,298, base rate 0.369. Intervals are 95% bootstrap,
-resampling **host stars** rather than rows — sibling KOIs are not independent
-draws, so a row bootstrap would report an interval narrower than the data
-supports.
+Zero-shot on TESS, n = 2,562, base rate 0.495. The model was trained on Kepler
+and has seen no TESS object.
 
-| Metric | Value | 95% CI |
-|---|---|---|
-| ROC-AUC | 0.9839 | 0.9792 – 0.9879 |
-| PR-AUC | 0.9666 | 0.9551 – 0.9757 |
-| Brier | 0.0440 | — |
-| Accuracy | 0.9356 | — |
-| Precision@50 | 1.000 | — |
-
-Confusion matrix at threshold 0.5: 1,409 TN, 42 FP, 106 FN, 741 TP. Accuracy is
-listed but not headlined: the classes are imbalanced 63/37, so always guessing
-"false positive" already scores 0.631, and the operational question is ranking
-rather than classification. The error profile is asymmetric on purpose — the
-model misses 106 real planets to raise only 42 false alarms, which is the right
-bias for a shortlist that costs telescope time.
-
-### Is it overfitting?
-
-No, and the evidence is recorded rather than asserted. Overfitting is a gap, not
-a level:
-
-| | ROC-AUC |
+| Metric | Value |
 |---|---|
-| On the rows it trained on | 0.9999 |
-| On held-out stars | 0.9854 |
-| **Gap** | **0.0145** |
+| **Accuracy** | **0.7697** (majority-class baseline 0.5055) |
+| ROC-AUC | 0.8376 |
+| PR-AUC | 0.8031 |
+| Brier | 0.1771 |
 
-The learning curve, measured against the same 1,992 held-out stars throughout,
-is flat past half the data: 0.9764 from 519 rows, 0.9809 from 1,300, 0.9854 from
-all 5,287. Both are written to `docs/metrics/metrics.json` by every training run
-under the `overfitting` key.
+```
+confusion, threshold 0.5      predicted FP   predicted planet
+  actual false positive             975              320
+  actual planet                     270              997
+```
 
-Model ladder, grouped 5-fold CV — every family measured identically, with the
-fold-to-fold spread alongside:
+Accuracy is quoted here and nowhere else. TESS is close to class-balanced, so
+the figure carries information; Kepler's held-out slice is 63% false positives,
+where predicting the majority class alone scores 0.631 and an accuracy would
+flatter without informing. In-domain results are reported as ROC-AUC, PR-AUC and
+Brier, which are base-rate free and therefore comparable across the two domains.
 
-| Model | PR-AUC | ROC-AUC | Brier |
-|---|---|---|---|
-| Soft-vote ensemble | 0.9694 ± 0.0056 | 0.9832 | 0.0457 |
-| XGBoost | 0.9687 ± 0.0057 | 0.9826 | 0.0464 |
-| CatBoost | 0.9686 ± 0.0053 | 0.9827 | 0.0463 |
-| LightGBM | 0.9666 ± 0.0064 | 0.9818 | 0.0492 |
-| HistGradientBoosting | 0.9664 ± 0.0061 | 0.9815 | 0.0483 |
-| RandomForest | 0.9614 ± 0.0073 | 0.9786 | 0.0539 |
-| Logistic regression | 0.8525 ± 0.0226 | 0.9154 | 0.1124 |
-| Dummy (prior) | 0.3620 ± 0.0107 | 0.5000 | 0.2310 |
-
-**The spread is the point.** The top five rows span 0.0030 PR-AUC, which is
-smaller than any one of their fold-to-fold standard deviations. Ranking them
-against each other is not meaningful, and a project that reported "our best
-model, 0.969" without that column would be over-reading its own table.
-
-Optuna then searched XGBoost — the best *tunable* family — over 40 trials under
-the same grouped CV, improving it 0.9687 → 0.9689. That did not pass the untuned
-ensemble (0.9694), so the soft-vote ensemble ships. Both margins are inside the
-noise band, and the ensemble is preferred on its CV score alone, not because any
-difference here is detectable.
-
-Note that the ensemble fits its training data harder than a single model does —
-0.9999 train ROC-AUC against CatBoost's 0.9947 — which widens the
-generalisation gap from 0.008 to 0.015. Still well inside the threshold, but
-worth stating rather than glossing.
+Restricted to the same 11 shared features, the in-domain reference is ROC-AUC
+0.9653, PR-AUC 0.9345, Brier 0.0694 — so the cost of changing telescope is a
+0.128 drop in ranking and a Brier score that more than doubles. Full in-domain
+figures, confidence intervals from a host-star bootstrap, the model ladder and
+the leakage ablations are all in `docs/metrics/metrics.json` and `LEAKAGE.md`.
 
 ## Calibration
 
@@ -165,11 +123,12 @@ The reliability curve is in `docs/metrics/reliability.png`. Calibration is
 1. **Cross-mission transfer degrades.** 0.838 ROC-AUC on TESS, down from 0.965
    in-domain, with the Brier score more than doubling. The ordering is still
    useful off-domain; the probabilities are not.
-2. **The task is easier than the headline suggests.** Kepler false positives are
+2. **The training task is easier than it sounds.** Kepler false positives are
    dominated by eclipsing binaries whose implied planet radius is physically
    impossible — 99.8% of objects above 40 R⊕ are false positives. The model is
    strong at *planet vs eclipsing binary*, which is not the same as being strong
-   on genuinely marginal signals.
+   on genuinely marginal signals. Part of the cross-mission drop is that TESS
+   does not hand it the same easy separation.
 3. **Candidate labels reflect follow-up selection.** Which planets got confirmed
    depends on target brightness, period, and multiplicity — not only on physics.
    This is why the model is trained on resolved dispositions only.
@@ -181,7 +140,9 @@ The reliability curve is in `docs/metrics/reliability.png`. Calibration is
    preserved.
 5. **Model choice is inside the noise band.** Tuning moved XGBoost by 0.0002
    PR-AUC and the top five families span 0.0030, against fold standard
-   deviations near 0.006. Do not read the ladder ordering as a finding.
+   deviations near 0.006 — see the `ladder` block in `metrics.json`. Do not read
+   that ordering as a finding; this problem is won by the features and the
+   evaluation protocol, not by the architecture.
 6. **No nested cross-validation.** The honest estimate comes from a
    star-held-out test set plus a grouped bootstrap, not from nesting the Optuna
    search inside an outer CV loop. Nesting would multiply a ~20-minute run by
