@@ -214,16 +214,23 @@ signal was measurement refinement — which is why §3 exists at all.
 Trained on Kepler, evaluated zero-shot on 2,562 resolved TESS objects using
 only features both catalogs express:
 
-| | n | ROC-AUC | PR-AUC | Brier |
-|---|---|---|---|---|
-| Kepler (in-domain) | 2,298 | 0.9653 | 0.9345 | 0.0694 |
-| TESS (zero-shot) | 2,562 | **0.8376** | 0.8031 | **0.1771** |
+| | n | Accuracy | Baseline | ROC-AUC | PR-AUC | Brier |
+|---|---|---|---|---|---|---|
+| Kepler (in-domain) | 2,298 | 0.9021 | 0.6314 | 0.9653 | 0.9345 | 0.0694 |
+| TESS (zero-shot) | 2,562 | **0.7697** | 0.5055 | **0.8376** | 0.8031 | **0.1771** |
 
-ROC-AUC falls by 0.128 and the Brier score more than doubles. **The ranking
-largely survives the domain shift; the calibration does not** — probabilities
-that are trustworthy on Kepler are not trustworthy on TESS. TESS has shorter
-baselines, a redder bandpass, larger pixels and therefore more blending, and a
-different false-positive population.
+**Read the accuracies with their baselines or not at all.** Kepler's held-out
+slice is 63% false positives, so predicting the majority class scores 0.631
+before the model does anything; TESS is close to balanced, where the same
+strategy scores 0.506. The raw accuracy gap of 13 points is therefore part real
+degradation and part arithmetic — measured as lift over baseline the two are
+nearly identical, +27.1 against +26.4.
+
+The base-rate-free comparison is ROC-AUC, and it falls by 0.128. The Brier score
+more than doubles. **The ranking largely survives the domain shift; the
+calibration does not** — probabilities that are trustworthy on Kepler are not
+trustworthy on TESS. TESS has shorter baselines, a redder bandpass, larger
+pixels and therefore more blending, and a different false-positive population.
 
 This figure also measures one of the fixes above. TESS does not carry several
 KOI columns at all, and an earlier feature builder filled those gaps with the

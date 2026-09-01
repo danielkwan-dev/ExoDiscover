@@ -8,8 +8,10 @@ because they are unvetted: they carry no ground truth to score against.
 
 from __future__ import annotations
 
+import numpy as np
 import pandas as pd
 from sklearn.ensemble import HistGradientBoostingClassifier
+from sklearn.metrics import accuracy_score, confusion_matrix
 
 from exodiscover.config import settings
 from exodiscover.data.schema import TOI_LABEL_MAP, TOI_RESOLVED
@@ -61,6 +63,28 @@ def toi_to_common(toi: pd.DataFrame) -> tuple[pd.DataFrame, pd.Series]:
     return X, y.reset_index(drop=True)
 
 
+def _domain_scores(y_true: pd.Series, y_prob: np.ndarray) -> dict:
+    """Metrics for one domain, with the baseline that makes accuracy readable.
+
+    Accuracy alone does not survive being compared across these two domains.
+    Kepler's held-out slice is 63% false positives, so predicting the majority
+    class scores 0.63 before the model does anything; TESS is close to balanced,
+    where the same strategy scores 0.51. Quoting the two accuracies side by side
+    without their baselines overstates the drop -- the base-rate-free comparison
+    is ROC-AUC, which is why it stays the headline metric.
+    """
+    y_pred = (y_prob >= 0.5).astype(int)
+    base_rate = float(y_true.mean())
+    return {
+        "n": int(len(y_true)),
+        "base_rate": base_rate,
+        "majority_baseline": max(base_rate, 1.0 - base_rate),
+        "accuracy": float(accuracy_score(y_true, y_pred)),
+        "confusion_matrix": confusion_matrix(y_true, y_pred).tolist(),
+        **binary_scores(y_true, y_prob),
+    }
+
+
 def run_transfer(koi: pd.DataFrame, toi: pd.DataFrame) -> dict:
     """Train on Kepler, score held-out Kepler and unseen TESS."""
     src = koi[koi["koi_disposition"].isin(["CONFIRMED", "FALSE POSITIVE"])].reset_index(drop=True)
@@ -72,12 +96,17 @@ def run_transfer(koi: pd.DataFrame, toi: pd.DataFrame) -> dict:
 
     X_tgt, y_tgt = toi_to_common(toi)
 
-    in_domain = binary_scores(y_te, model.predict_proba(X_te)[:, 1])
-    zero_shot = binary_scores(y_tgt, model.predict_proba(X_tgt)[:, 1])
+    in_domain = _domain_scores(y_te, model.predict_proba(X_te)[:, 1])
+    zero_shot = _domain_scores(y_tgt, model.predict_proba(X_tgt)[:, 1])
 
     return {
         "shared_features": SHARED_FEATURES,
-        "in_domain": {"n": int(len(y_te)), "base_rate": float(y_te.mean()), **in_domain},
-        "zero_shot": {"n": int(len(y_tgt)), "base_rate": float(y_tgt.mean()), **zero_shot},
+        "in_domain": in_domain,
+        "zero_shot": zero_shot,
         "roc_auc_drop": float(in_domain["roc_auc"] - zero_shot["roc_auc"]),
+        # Reported alongside the ROC-AUC drop because they disagree, and the
+        # disagreement is the point: the ranking degrades, the probabilities
+        # collapse. A model that still orders candidates usefully off-domain
+        # but can no longer say how likely any of them is.
+        "brier_ratio": float(zero_shot["brier"] / in_domain["brier"]),
     }

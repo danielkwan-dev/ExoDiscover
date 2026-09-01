@@ -6,13 +6,22 @@ from Kepler transit parameters.
 
 ## Start here: what it can actually do
 
-On **new data from a different telescope**, this model reaches **0.838 ROC-AUC
-and a Brier score of 0.177** — the ranking mostly survives, the probabilities
-do not. That is the number that describes its real-world use, and it is
-reported before the flattering one on purpose.
+**Trained on Kepler, tested on TESS.** On objects from a telescope it has never
+seen, the model reaches **77% accuracy against a 51% majority-class baseline**,
+**0.838 ROC-AUC**, and a Brier score of **0.177**. That is the number that
+describes its real-world use, and it is reported before the flattering one on
+purpose.
 
-On held-out Kepler stars it reaches **0.984 ROC-AUC (95% CI 0.979–0.988)**.
-Both are true; they measure different things.
+For comparison, restricted to the same 11 features both catalogs express, it
+reaches 90% accuracy and 0.965 ROC-AUC on held-out Kepler stars. Note the two
+accuracies are not directly comparable: Kepler's held-out slice is 63% false
+positives while TESS is nearly balanced, so the baselines differ by 12 points.
+The base-rate-free comparison is ROC-AUC, 0.965 → 0.838.
+
+The model that ships uses all 17 features and reaches **0.984 ROC-AUC (95% CI
+0.979–0.988), 93.6% accuracy** on held-out Kepler. All three numbers are true;
+they measure different things, and the cross-mission one is the one that says
+what happens on data this project did not train on.
 
 ## Intended use
 

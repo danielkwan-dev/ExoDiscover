@@ -7,15 +7,32 @@ Built for [NASA Space Apps 2025, "A World Away: Hunting for Exoplanets with
 AI"](https://www.spaceappschallenge.org/2025/challenges/a-world-away-hunting-for-exoplanets-with-ai/),
 then rebuilt with the methodology the hackathon version skipped.
 
+**Trained on Kepler. Tested on TESS.** The model learns from one telescope's
+catalog and is then scored on a different telescope's — objects it has never
+seen, from a mission with a different bandpass, shorter baselines, and larger
+pixels. That is the challenge's "analyse new data", and it is the number this
+project leads with.
+
+```
+77% accuracy zero-shot on TESS      (majority-class baseline 51%)   ← the honest number
+90% on held-out Kepler stars        (majority-class baseline 63%)   ← same features, same model
+ROC-AUC 0.965 → 0.838                                               ← the cost of changing telescope
+```
+
+Accuracy alone would overstate that gap — Kepler is 63% false positives while
+TESS is nearly balanced, so the baselines differ by 12 points. ROC-AUC is
+base-rate free, and it puts the real degradation at 0.13. The ranking survives
+the domain shift; the calibration does not, with the Brier score more than
+doubling.
+
+Both rows above use the **11 features the two catalogs share**, so the
+comparison is like-for-like. The model that actually ships uses all 17 and
+scores **0.984 ROC-AUC / 93.6% accuracy** on held-out Kepler stars — reported
+in full below, because a cross-mission result means nothing without the
+in-domain one beside it.
+
 Runs locally, CPU only — [setup below](#run-it). Nothing is hosted: the API and
 the UI each start with one command.
-
-```
-ROC-AUC 0.984 on held-out stars   (95% CI 0.979–0.988)   ← the flattering number
-ROC-AUC 0.838 zero-shot on TESS                          ← what it does on genuinely new data
-```
-
-Both are reported, in that order, everywhere in this repo.
 
 ---
 

@@ -133,3 +133,21 @@ def test_transfer_reports_both_domains(koi_sample, toi_sample):
     assert 0.0 <= result["in_domain"]["roc_auc"] <= 1.0
     assert result["zero_shot"]["n"] > 0
     assert set(result["in_domain"]) >= {"n", "base_rate", "roc_auc", "pr_auc", "brier"}
+
+
+def test_transfer_reports_accuracy_against_its_own_baseline(koi_sample, toi_sample):
+    """The headline figure is an accuracy, so it has to ship with its baseline.
+
+    Kepler is 63% false positives and TESS is nearly balanced, so the two
+    accuracies are not comparable on their own: guessing the majority class
+    already scores 63% on one and 51% on the other. Reporting the baseline
+    beside each is what stops the comparison being misread.
+    """
+    result = transfer.run_transfer(koi_sample, toi_sample)
+    for domain in ("in_domain", "zero_shot"):
+        block = result[domain]
+        assert 0.0 <= block["accuracy"] <= 1.0
+        assert 0.0 <= block["majority_baseline"] <= 1.0
+        assert block["majority_baseline"] == pytest.approx(
+            max(block["base_rate"], 1 - block["base_rate"])
+        )
