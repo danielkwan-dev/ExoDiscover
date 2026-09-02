@@ -2,65 +2,62 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
-All colors MUST be HSL.
-*/
+/* Design tokens.
+ *
+ * The look is a printed observatory report rather than a product landing page:
+ * warm paper, ink, hairline rules, and one accent reserved for data. There is
+ * no glassmorphism, no glow and no gradient - every earlier version of this
+ * file had all three, and on a measurement tool they read as promotion.
+ *
+ * Type carries the hierarchy. A serif for headings, a sans for prose, and every
+ * figure set in a monospace with tabular numerals so columns of numbers line up
+ * and do not shift width as they update.
+ */
 
 @layer base {
   :root {
-    --background: 240 20% 6%;
-    --foreground: 210 40% 98%;
+    /* Warm paper, not white - pure white beside a chart reads as glare. */
+    --background: 40 24% 97%;
+    --foreground: 222 18% 14%;
 
-    --card: 240 18% 10%;
-    --card-foreground: 210 40% 98%;
+    --card: 0 0% 100%;
+    --card-foreground: 222 18% 14%;
 
-    --popover: 240 20% 8%;
-    --popover-foreground: 210 40% 98%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 18% 14%;
 
-    --primary: 265 85% 65%;
-    --primary-foreground: 210 40% 98%;
+    /* Ink, not a brand colour. Buttons are dark because the page is light. */
+    --primary: 222 20% 16%;
+    --primary-foreground: 40 24% 97%;
 
-    --secondary: 217 35% 20%;
-    --secondary-foreground: 210 40% 98%;
+    --secondary: 40 14% 92%;
+    --secondary-foreground: 222 18% 14%;
 
-    --muted: 240 15% 15%;
-    --muted-foreground: 215 20% 65%;
+    --muted: 40 14% 93%;
+    --muted-foreground: 220 9% 42%;
 
-    --accent: 265 85% 65%;
-    --accent-foreground: 210 40% 98%;
+    /* The one accent, and it earns its place: measured values, the active nav
+     * item, a chart series. Never decoration. */
+    --accent: 12 68% 42%;
+    --accent-foreground: 40 24% 97%;
 
-    --destructive: 0 62% 50%;
-    --destructive-foreground: 210 40% 98%;
+    --destructive: 0 55% 42%;
+    --destructive-foreground: 40 24% 97%;
 
-    --border: 240 15% 20%;
-    --input: 240 15% 18%;
-    --ring: 265 85% 65%;
+    --border: 38 14% 86%;
+    --input: 38 14% 82%;
+    --ring: 12 68% 42%;
 
-    --radius: 0.75rem;
+    /* Nearly square. Pill-shaped everything is the giveaway of a template. */
+    --radius: 0.25rem;
 
-    --cosmic-purple: 265 85% 65%;
-    --cosmic-blue: 220 90% 60%;
-    --cosmic-cyan: 190 80% 55%;
-    --nebula-pink: 320 70% 60%;
-    --star-glow: 50 100% 70%;
-    
-    --gradient-cosmic: linear-gradient(135deg, hsl(265 85% 65%) 0%, hsl(220 90% 60%) 50%, hsl(190 80% 55%) 100%);
-    --gradient-nebula: linear-gradient(180deg, hsl(265 85% 65% / 0.15) 0%, hsl(240 20% 6%) 100%);
-    --gradient-card: linear-gradient(145deg, hsl(240 18% 12% / 0.8) 0%, hsl(240 18% 8% / 0.6) 100%);
-    
-    --shadow-cosmic: 0 0 40px hsl(265 85% 65% / 0.3), 0 0 80px hsl(220 90% 60% / 0.2);
-    --shadow-glow: 0 0 20px hsl(265 85% 65% / 0.5);
-    
-    --transition-smooth: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-
-    --sidebar-background: 240 20% 8%;
-    --sidebar-foreground: 210 40% 98%;
-    --sidebar-primary: 265 85% 65%;
-    --sidebar-primary-foreground: 210 40% 98%;
-    --sidebar-accent: 240 18% 15%;
-    --sidebar-accent-foreground: 210 40% 98%;
-    --sidebar-border: 240 15% 20%;
-    --sidebar-ring: 265 85% 65%;
+    /* System stacks, so the app still looks like itself offline. */
+    --font-display: "Iowan Old Style", "Palatino Linotype", Palatino, Charter,
+      Georgia, "Times New Roman", serif;
+    --font-body: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+      "Helvetica Neue", Arial, sans-serif;
+    --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
+      "Liberation Mono", monospace;
   }
 }
 
@@ -71,49 +68,52 @@ All colors MUST be HSL.
 
   body {
     @apply bg-background text-foreground;
-    background: linear-gradient(180deg, hsl(240 20% 6%) 0%, hsl(240 25% 8%) 50%, hsl(240 20% 6%) 100%);
+    font-family: var(--font-body);
+    font-size: 15px;
+    line-height: 1.6;
     min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-display);
+    font-weight: 600;
+    letter-spacing: -0.011em;
+  }
+
+  table {
+    font-variant-numeric: tabular-nums;
+  }
+
+  code,
+  kbd,
+  pre {
+    font-family: var(--font-mono);
+    font-size: 0.9em;
   }
 }
 
 @layer utilities {
-  .cosmic-glow {
-    box-shadow: var(--shadow-cosmic);
-  }
-  
-  .star-glow {
-    box-shadow: var(--shadow-glow);
-  }
-  
-  .glass-card {
-    background: var(--gradient-card);
-    backdrop-filter: blur(12px);
+  /* A panel is a hairline and a white ground. That is the whole treatment. */
+  .panel {
+    background: hsl(var(--card));
     border: 1px solid hsl(var(--border));
   }
-  
-  .animate-pulse-glow {
-    animation: pulse-glow 3s ease-in-out infinite;
+
+  /* Every number the model produces, so figures read as readings. */
+  .figure {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.02em;
   }
-  
-  @keyframes pulse-glow {
-    0%, 100% {
-      box-shadow: 0 0 20px hsl(var(--cosmic-purple) / 0.3);
-    }
-    50% {
-      box-shadow: 0 0 40px hsl(var(--cosmic-purple) / 0.6), 0 0 60px hsl(var(--cosmic-blue) / 0.3);
-    }
-  }
-  
-  .animate-float {
-    animation: float 6s ease-in-out infinite;
-  }
-  
-  @keyframes float {
-    0%, 100% {
-      transform: translateY(0px);
-    }
-    50% {
-      transform: translateY(-20px);
-    }
+
+  /* A printed table header: small, spaced, quiet. */
+  .label {
+    font-size: 0.6875rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: hsl(var(--muted-foreground));
   }
 }

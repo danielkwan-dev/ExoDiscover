@@ -12,7 +12,7 @@ const Nav = () => (
   <header className="sticky top-0 z-50 border-b border-border/60 bg-background/80 backdrop-blur-lg">
     <nav className="container flex h-16 items-center gap-8 px-4">
       <NavLink to="/" className="flex items-center gap-2 font-semibold">
-        <Telescope className="h-5 w-5 text-cosmic-purple" />
+        <Telescope className="h-5 w-5 text-accent" />
         ExoDiscover
       </NavLink>
       <ul className="flex items-center gap-6 text-sm">

@@ -58,18 +58,16 @@ export default {
           border: "hsl(var(--sidebar-border))",
           ring: "hsl(var(--sidebar-ring))",
         },
-        cosmic: {
-          purple: "hsl(var(--cosmic-purple))",
-          blue: "hsl(var(--cosmic-blue))",
-          cyan: "hsl(var(--cosmic-cyan))",
-          pink: "hsl(var(--nebula-pink))",
-          glow: "hsl(var(--star-glow))",
-        },
+      },
+      fontFamily: {
+        display: "var(--font-display)",
+        sans: "var(--font-body)",
+        mono: "var(--font-mono)",
       },
       borderRadius: {
         lg: "var(--radius)",
-        md: "calc(var(--radius) - 2px)",
-        sm: "calc(var(--radius) - 4px)",
+        md: "calc(var(--radius) - 1px)",
+        sm: "calc(var(--radius) - 2px)",
       },
       keyframes: {
         "accordion-down": {

@@ -129,6 +129,26 @@ def test_features_do_not_depend_on_the_rest_of_the_batch(koi_sample):
     pd.testing.assert_frame_equal(alone, in_batch)
 
 
+def test_an_absent_column_matches_a_null_value(koi_sample):
+    """Omitting a column and sending it empty must produce the same features.
+
+    koi_insol carried a default of 1.0 for the absent case, so log_insol came
+    out as 0.0 there and NaN when the column arrived holding null. The API's
+    request model lists koi_insol as optional, so a caller who leaves it out
+    gets one answer and a caller who sends null gets another -- for the same
+    object. 1.0 was also a fabricated value, which is the thing this builder
+    stopped doing everywhere else.
+    """
+    df = koi_sample.reset_index(drop=True).head(3)
+
+    absent = tabular.build_features(df.drop(columns=["koi_insol"]))
+    explicit_null = df.copy()
+    explicit_null["koi_insol"] = np.nan
+    nulled = tabular.build_features(explicit_null)
+
+    pd.testing.assert_frame_equal(absent, nulled)
+
+
 def test_missing_inputs_stay_missing(koi_sample):
     """A NaN in must not be silently invented into a plausible-looking value."""
     df = koi_sample.reset_index(drop=True)

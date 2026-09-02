@@ -9,7 +9,10 @@ const BASE = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
 
 export interface Contribution {
   feature: string;
-  value: number;
+  /** null when the caller did not supply this input. The model still scores the
+   * row - the boosted families route a missing value down a learned branch - so
+   * the API reports null rather than inventing a plausible number. */
+  value: number | null;
   shap: number;
 }
 
@@ -63,6 +66,19 @@ export interface Calibration {
   n_validation: number;
 }
 
+export interface TransferDomain {
+  n: number;
+  roc_auc: number;
+  pr_auc: number;
+  brier: number;
+  base_rate: number;
+  accuracy: number;
+  /** Score from always predicting the majority class. Quoting an accuracy
+   * without it invites comparing domains whose baselines differ. */
+  majority_baseline: number;
+  confusion_matrix: number[][];
+}
+
 export interface Metrics {
   model: {
     name: string;
@@ -87,9 +103,10 @@ export interface Metrics {
   ladder: LadderRow[];
   ablation: { leakage: AblationRow[]; framing: AblationRow[] };
   transfer: {
-    in_domain: { n: number; roc_auc: number; pr_auc: number; base_rate: number };
-    zero_shot: { n: number; roc_auc: number; pr_auc: number; base_rate: number };
+    in_domain: TransferDomain;
+    zero_shot: TransferDomain;
     roc_auc_drop: number;
+    brier_ratio: number;
   };
   importance: { feature: string; mean_abs_shap: number }[];
   reliability: { bin_centers: number[]; observed: number[]; counts: number[] };
@@ -163,16 +180,24 @@ export const api = {
   },
 };
 
-/** Kepler-10 b, as a worked example the user can start from. */
+/** Kepler-10 b (KOI K00072.01), as a worked example the user can start from.
+ *
+ * These are the archive's own KOI values, not the published literature ones.
+ * The distinction matters: an earlier version of this constant carried the
+ * paper's figures — depth 152 ppm and SNR 25 against the catalogue's 190.4 and
+ * 189.5 — and the model scored this confirmed planet at 0.49, because it was
+ * being shown numbers from a different measurement of the same object than the
+ * ones it was trained on. On the catalogue's values it scores 0.96.
+ */
 export const KEPLER10B: KOIInput = {
-  koi_period: 0.837495,
-  koi_depth: 152.0,
-  koi_duration: 1.811,
-  koi_prad: 1.47,
-  koi_srad: 1.065,
-  koi_slogg: 4.35,
-  koi_steff: 5627,
-  koi_impact: 0.3,
-  koi_model_snr: 25,
+  koi_period: 0.837491225,
+  koi_depth: 190.4,
+  koi_duration: 1.796,
+  koi_prad: 1.43,
+  koi_srad: 1.044,
+  koi_slogg: 4.347,
+  koi_steff: 5676,
+  koi_impact: 0.022,
+  koi_model_snr: 189.5,
   n_kois_on_star: 2,
 };

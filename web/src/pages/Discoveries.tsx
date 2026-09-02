@@ -1,5 +1,4 @@
 import { useQuery } from "@tanstack/react-query";
-import { Sparkles } from "lucide-react";
 
 import { api } from "../lib/api";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
@@ -27,11 +26,8 @@ const Discoveries = () => {
   return (
     <div className="container px-4 py-12">
       <div className="mx-auto max-w-5xl">
-        <div className="mb-2 inline-flex items-center gap-2 rounded-full glass-card px-4 py-2">
-          <Sparkles className="h-4 w-4 text-cosmic-cyan" />
-          <span className="text-sm">Never seen during training</span>
-        </div>
-        <h1 className="text-3xl font-bold">Candidate shortlist</h1>
+        <p className="label">Never seen during training</p>
+        <h1 className="mt-2 text-3xl">Candidate shortlist</h1>
         <p className="mt-2 max-w-3xl text-muted-foreground">
           The Kepler catalog holds 1,979 KOIs that passed automated vetting but were never
           confirmed. The classifier is trained only on resolved dispositions, so these are
@@ -43,7 +39,7 @@ const Discoveries = () => {
         {error && <Failed error={error as Error} />}
 
         {data && (
-          <Card className="glass-card mt-8">
+          <Card className="panel mt-8">
             <CardHeader>
               <CardTitle className="text-lg">Top {data.n} by probability</CardTitle>
               <CardDescription>
@@ -74,7 +70,7 @@ const Discoveries = () => {
                         </span>
                       </TableCell>
                       <TableCell>
-                        <span className="font-semibold text-cosmic-purple">
+                        <span className="font-semibold text-accent">
                           {(c.probability * 100).toFixed(1)}%
                         </span>
                       </TableCell>

@@ -1,138 +1,165 @@
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowRight, ShieldCheck, Telescope, Waypoints } from "lucide-react";
 
 import { api } from "../lib/api";
-import { Button } from "../components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
-import heroImage from "../assets/hero-exoplanet.jpg";
+
+/**
+ * The overview reads as the front page of a report, not a product page.
+ *
+ * Deliberately absent: a hero image behind the headline, a pill badge above it,
+ * a three-column grid of icon-topped cards, and any gradient. Those are the
+ * house style of generated landing pages, and on a measurement tool they
+ * undercut the thing being measured.
+ */
+
+const Dash = () => <span className="text-muted-foreground">&mdash;</span>;
+
+const pct = (x: number | undefined) =>
+  x === undefined ? <Dash /> : `${(x * 100).toFixed(1)}%`;
+
+const num = (x: number | undefined, dp = 3) =>
+  x === undefined ? <Dash /> : x.toFixed(dp);
 
 const Index = () => {
-  // Fetched, not hardcoded: if the API is down these read "—" rather than
-  // showing numbers the model never produced.
+  // Fetched, never hardcoded: with the API down these read as a dash rather
+  // than showing numbers the model did not produce.
   const { data } = useQuery({ queryKey: ["metrics"], queryFn: api.metrics, retry: false });
-
-  const headline = data
-    ? [
-        { label: "ROC-AUC on held-out stars", value: data.test.roc_auc.toFixed(3) },
-        { label: "Training KOIs", value: data.model.n_train_rows.toLocaleString() },
-        { label: "Distinct host stars", value: data.model.n_train_stars.toLocaleString() },
-      ]
-    : [
-        { label: "ROC-AUC on held-out stars", value: "—" },
-        { label: "Training KOIs", value: "—" },
-        { label: "Distinct host stars", value: "—" },
-      ];
+  const tess = data?.transfer.zero_shot;
+  const kepler = data?.transfer.in_domain;
 
   return (
-    <div>
-      <section className="relative overflow-hidden">
-        <img
-          src={heroImage}
-          alt=""
-          aria-hidden
-          className="absolute inset-0 h-full w-full object-cover opacity-20"
-        />
-        <div className="container relative px-4 py-24">
-          <div className="max-w-3xl">
-            <div className="mb-4 inline-flex items-center gap-2 rounded-full glass-card px-4 py-2">
-              <Telescope className="h-4 w-4 text-cosmic-purple" />
-              <span className="text-sm">NASA Space Apps 2025 · A World Away</span>
-            </div>
-            <h1 className="text-5xl font-bold leading-tight md:text-6xl">
-              Hunting exoplanets with{" "}
-              <span className="text-cosmic-purple">honest</span> machine learning
-            </h1>
-            <p className="mt-6 text-lg text-muted-foreground">
-              A classifier over NASA's Kepler catalog that separates real planets from
-              false positives — built so that the number it reports is the number you'd
-              actually get on new data.
-            </p>
-            <div className="mt-8 flex flex-wrap gap-3">
-              <Button asChild size="lg">
-                <Link to="/predict">
-                  Classify a signal <ArrowRight className="ml-2 h-4 w-4" />
-                </Link>
-              </Button>
-              <Button asChild size="lg" variant="secondary">
-                <Link to="/discoveries">See the candidate shortlist</Link>
-              </Button>
-            </div>
-          </div>
+    <div className="container max-w-3xl px-4 py-16">
+      <header className="border-b border-border pb-10">
+        <p className="label">NASA Space Apps 2025 &middot; A World Away</p>
+        <h1 className="mt-3 text-4xl leading-tight md:text-5xl">
+          Trained on Kepler.
+          <br />
+          Tested on TESS.
+        </h1>
+        <p className="mt-5 text-muted-foreground">
+          A transit classifier that learns from one telescope&rsquo;s catalogue and is
+          then scored on a different telescope&rsquo;s &mdash; objects it has never
+          seen, from a mission with a redder bandpass, shorter baselines and larger
+          pixels. The figure below is what it does on data it was not trained on.
+        </p>
+      </header>
 
-          <div className="mt-16 grid max-w-3xl gap-4 sm:grid-cols-3">
-            {headline.map((s) => (
-              <div key={s.label} className="glass-card rounded-xl p-5">
-                <p className="text-3xl font-bold text-cosmic-purple">{s.value}</p>
-                <p className="mt-1 text-xs text-muted-foreground">{s.label}</p>
-              </div>
-            ))}
-          </div>
-        </div>
+      <section className="mt-10">
+        <h2 className="text-xl">Zero-shot result</h2>
+        <table className="mt-4 w-full border-collapse text-sm">
+          <thead>
+            <tr className="border-b border-border text-left">
+              <th className="label py-2 font-normal">Metric</th>
+              <th className="label py-2 text-right font-normal">TESS (unseen)</th>
+              <th className="label py-2 text-right font-normal">Kepler (reference)</th>
+            </tr>
+          </thead>
+          <tbody className="figure">
+            <tr className="border-b border-border/60">
+              <td className="py-2 font-sans">Accuracy</td>
+              <td className="py-2 text-right font-semibold text-accent">
+                {pct(tess?.accuracy)}
+              </td>
+              <td className="py-2 text-right text-muted-foreground">
+                {pct(kepler?.accuracy)}
+              </td>
+            </tr>
+            <tr className="border-b border-border/60">
+              <td className="py-2 font-sans text-muted-foreground">
+                majority-class baseline
+              </td>
+              <td className="py-2 text-right text-muted-foreground">
+                {pct(tess?.majority_baseline)}
+              </td>
+              <td className="py-2 text-right text-muted-foreground">
+                {pct(kepler?.majority_baseline)}
+              </td>
+            </tr>
+            <tr className="border-b border-border/60">
+              <td className="py-2 font-sans">ROC-AUC</td>
+              <td className="py-2 text-right">{num(tess?.roc_auc)}</td>
+              <td className="py-2 text-right text-muted-foreground">
+                {num(kepler?.roc_auc)}
+              </td>
+            </tr>
+            <tr className="border-b border-border/60">
+              <td className="py-2 font-sans">Brier</td>
+              <td className="py-2 text-right">{num(tess?.brier)}</td>
+              <td className="py-2 text-right text-muted-foreground">
+                {num(kepler?.brier)}
+              </td>
+            </tr>
+            <tr>
+              <td className="py-2 font-sans text-muted-foreground">objects scored</td>
+              <td className="py-2 text-right text-muted-foreground">
+                {tess ? tess.n.toLocaleString() : <Dash />}
+              </td>
+              <td className="py-2 text-right text-muted-foreground">
+                {kepler ? kepler.n.toLocaleString() : <Dash />}
+              </td>
+            </tr>
+          </tbody>
+        </table>
+        <p className="mt-4 text-sm text-muted-foreground">
+          Read each accuracy against its baseline. Kepler&rsquo;s held-out slice is 63%
+          false positives while TESS is close to balanced, so the two are not directly
+          comparable &mdash; the base-rate-free comparison is ROC-AUC. The ranking
+          largely survives the change of telescope; the calibration does not, and the
+          Brier score more than doubles.
+        </p>
       </section>
 
-      <section className="container px-4 py-20">
-        <h2 className="text-3xl font-bold">What makes this different</h2>
-        <p className="mt-2 max-w-2xl text-muted-foreground">
-          Most exoplanet classifiers report accuracy above 97%. Almost all of them are
-          measuring something other than what they claim.
+      <section className="mt-12 border-t border-border pt-10">
+        <h2 className="text-xl">Why the catalogue needs handling with care</h2>
+        <p className="mt-4 text-muted-foreground">
+          The Kepler table ships the answer key. <code>koi_score</code> is the
+          automated vetting pipeline&rsquo;s own confidence in its verdict, and four{" "}
+          <code>koi_fpflag_*</code> columns are its individual false-positive
+          decisions. A model given them reaches ROC-AUC 0.9999 &mdash; it has learned
+          to read the label rather than the physics.
         </p>
 
-        <div className="mt-10 grid gap-6 md:grid-cols-3">
-          <Card className="glass-card">
-            <CardHeader>
-              <ShieldCheck className="h-6 w-6 text-cosmic-cyan" />
-              <CardTitle className="mt-3 text-lg">The labels are quarantined</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <CardDescription>
-                The Kepler table ships <code className="font-mono text-xs">koi_score</code>{" "}
-                and four <code className="font-mono text-xs">koi_fpflag_*</code> columns —
-                these <em>are</em> the vetting pipeline's verdict. A model given them
-                reproduces the answer instead of learning the physics. A test fails the
-                build if one ever reaches the feature matrix.
-              </CardDescription>
-            </CardContent>
-          </Card>
-
-          <Card className="glass-card">
-            <CardHeader>
-              <Waypoints className="h-6 w-6 text-cosmic-cyan" />
-              <CardTitle className="mt-3 text-lg">Whole stars are held out</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <CardDescription>
-                9,564 candidate signals come from only 8,214 stars — up to seven on one
-                star, sharing stellar parameters and photometry. Splitting rows at random
-                puts siblings on both sides. Every split here is grouped by host star.
-              </CardDescription>
-            </CardContent>
-          </Card>
-
-          <Card className="glass-card">
-            <CardHeader>
-              <Telescope className="h-6 w-6 text-cosmic-cyan" />
-              <CardTitle className="mt-3 text-lg">Physics, not just columns</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <CardDescription>
-                Features include the transit duration implied by Kepler's third law and the
-                depth implied by the planet-to-star radius ratio. Eclipsing binaries and
-                blended stars break those relationships in characteristic ways.
-              </CardDescription>
-            </CardContent>
-          </Card>
-        </div>
-
-        <div className="mt-10">
-          <Button asChild variant="secondary">
-            <Link to="/model">
-              See the full ablation and calibration
-              <ArrowRight className="ml-2 h-4 w-4" />
-            </Link>
-          </Button>
-        </div>
+        <dl className="mt-8 space-y-6">
+          <div>
+            <dt className="font-medium">The verdict columns are quarantined</dt>
+            <dd className="mt-1 text-sm text-muted-foreground">
+              Dropped on the way into feature construction and asserted absent on the
+              way out. A second guard reads values rather than column names, flagging
+              any feature whose rank correlation with a vetting column exceeds 0.80 -
+              a threshold set by measurement rather than taste.
+            </dd>
+          </div>
+          <div>
+            <dt className="font-medium">Whole stars are held out</dt>
+            <dd className="mt-1 text-sm text-muted-foreground">
+              9,564 signals come from only 8,214 stars, up to seven on one star,
+              sharing stellar parameters and photometry. Splitting rows at random puts
+              siblings on both sides, so every split here is grouped by host star.
+            </dd>
+          </div>
+          <div>
+            <dt className="font-medium">Features encode physics, not just columns</dt>
+            <dd className="mt-1 text-sm text-muted-foreground">
+              The transit duration implied by Kepler&rsquo;s third law, and the depth
+              implied by the planet-to-star radius ratio. Eclipsing binaries and
+              blended stars break those relationships in characteristic ways &mdash;
+              and unlike instrument character, physics transfers between missions.
+            </dd>
+          </div>
+        </dl>
       </section>
+
+      <nav className="mt-12 flex flex-wrap gap-x-8 gap-y-2 border-t border-border pt-6 text-sm">
+        <Link className="underline underline-offset-4 hover:text-accent" to="/predict">
+          Classify a signal
+        </Link>
+        <Link className="underline underline-offset-4 hover:text-accent" to="/discoveries">
+          Candidate shortlist
+        </Link>
+        <Link className="underline underline-offset-4 hover:text-accent" to="/model">
+          Ablations and calibration
+        </Link>
+      </nav>
     </div>
   );
 };

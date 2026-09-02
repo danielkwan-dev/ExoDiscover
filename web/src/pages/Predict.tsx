@@ -34,9 +34,12 @@ const FIELDS: { key: keyof KOIInput; label: string; unit: string; step: number }
 ];
 
 const BAND_STYLE: Record<string, string> = {
-  confirmed: "bg-emerald-500/15 text-emerald-300 border-emerald-500/30",
-  "needs vetting": "bg-amber-500/15 text-amber-300 border-amber-500/30",
-  "false positive": "bg-rose-500/15 text-rose-300 border-rose-500/30",
+  // Status colours, and the only place a hue other than the accent is allowed.
+  // Each ships with its band name as text, so colour is never the sole channel.
+  // Tuned for the light ground: 700-weight ink on a 10% wash.
+  confirmed: "bg-emerald-600/10 text-emerald-800 border-emerald-700/30",
+  "needs vetting": "bg-amber-500/10 text-amber-800 border-amber-700/30",
+  "false positive": "bg-rose-600/10 text-rose-800 border-rose-700/30",
 };
 
 const Predict = () => {
@@ -58,7 +61,7 @@ const Predict = () => {
         </p>
 
         <div className="mt-8 grid gap-6 lg:grid-cols-5">
-          <Card className="glass-card lg:col-span-2">
+          <Card className="panel lg:col-span-2">
             <CardHeader>
               <CardTitle className="text-lg">Parameters</CardTitle>
               <CardDescription>Pre-filled with Kepler-10 b, a confirmed planet.</CardDescription>
@@ -101,7 +104,7 @@ const Predict = () => {
 
             {mutation.data && (
               <div className="space-y-6">
-                <Card className="glass-card">
+                <Card className="panel">
                   <CardHeader>
                     <div className="flex items-center justify-between">
                       <CardTitle className="text-lg">Result</CardTitle>
@@ -112,23 +115,23 @@ const Predict = () => {
                   </CardHeader>
                   <CardContent>
                     <div className="flex items-baseline gap-3">
-                      <span className="text-5xl font-bold text-cosmic-purple">
+                      <span className="text-5xl font-bold text-accent">
                         {(mutation.data.probability * 100).toFixed(1)}%
                       </span>
                       <span className="text-muted-foreground">
                         calibrated probability this is a planet
                       </span>
                     </div>
-                    <div className="mt-4 h-2 w-full overflow-hidden rounded-full bg-muted">
+                    <div className="mt-4 h-2 w-full overflow-hidden rounded-sm bg-muted">
                       <div
-                        className="h-full rounded-full bg-gradient-to-r from-cosmic-blue to-cosmic-purple"
+                        className="h-full rounded-full bg-accent"
                         style={{ width: `${mutation.data.probability * 100}%` }}
                       />
                     </div>
                   </CardContent>
                 </Card>
 
-                <Card className="glass-card">
+                <Card className="panel">
                   <CardHeader>
                     <CardTitle className="text-lg">Why</CardTitle>
                     <CardDescription>
@@ -148,21 +151,32 @@ const Predict = () => {
                         />
                         <Tooltip
                           contentStyle={{
-                            background: "hsl(240 18% 10%)",
-                            border: "1px solid hsl(240 15% 20%)",
-                            borderRadius: 8,
+                            background: "hsl(var(--card))",
+                            border: "1px solid hsl(var(--border))",
+                            borderRadius: "var(--radius)",
+                            fontFamily: "var(--font-mono)",
+                            fontSize: 12,
                           }}
-                          formatter={(v: number, _n, item) => [
-                            `${v >= 0 ? "+" : ""}${v.toFixed(3)} (value ${item.payload.value.toPrecision(3)})`,
-                            "SHAP",
-                          ]}
+                          formatter={(v: number, _n, item) => {
+                            // The API reports null for an input the caller left
+                            // out; the model scores the row regardless. Calling
+                            // toPrecision on it threw.
+                            const raw = item.payload.value;
+                            const shown =
+                              typeof raw === "number" ? raw.toPrecision(3) : "not supplied";
+                            return [`${v >= 0 ? "+" : ""}${v.toFixed(3)} (value ${shown})`, "SHAP"];
+                          }}
                         />
-                        <ReferenceLine x={0} stroke="hsl(215 20% 45%)" />
-                        <Bar dataKey="shap" radius={3}>
+                        <ReferenceLine x={0} stroke="hsl(var(--muted-foreground))" />
+                        <Bar dataKey="shap" radius={2}>
                           {waterfall.map((d, i) => (
                             <Cell
                               key={i}
-                              fill={d.shap >= 0 ? "hsl(158 64% 52%)" : "hsl(350 75% 60%)"}
+                              fill={
+                                d.shap >= 0
+                                  ? "hsl(var(--accent))"
+                                  : "hsl(var(--muted-foreground))"
+                              }
                             />
                           ))}
                         </Bar>
@@ -174,7 +188,7 @@ const Predict = () => {
             )}
 
             {!mutation.data && !mutation.isError && (
-              <Card className="glass-card flex h-full items-center justify-center">
+              <Card className="panel flex h-full items-center justify-center">
                 <CardContent className="py-20 text-center text-muted-foreground">
                   Adjust the parameters and press Classify.
                 </CardContent>

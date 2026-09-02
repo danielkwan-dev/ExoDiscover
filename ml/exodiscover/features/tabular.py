@@ -153,7 +153,10 @@ def build_features(koi: pd.DataFrame) -> pd.DataFrame:
     out["log_period"] = _safe_log10(period)
     out["log_depth"] = _safe_log10(depth)
     out["log_prad"] = _safe_log10(prad)
-    out["log_insol"] = _safe_log10(_numeric(df, "koi_insol", 1.0))
+    # No default. A default of 1.0 here meant an absent koi_insol column became
+    # log_insol 0.0 while a column holding null became NaN -- the same object
+    # scored two ways depending on how the caller expressed "I don't have this".
+    out["log_insol"] = _safe_log10(_numeric(df, "koi_insol"))
 
     for col in (
         "koi_impact",

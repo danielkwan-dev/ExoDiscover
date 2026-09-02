@@ -26,10 +26,10 @@ import { Failed, Loading } from "../components/ApiState";
 const pct = (n: number) => n.toFixed(4);
 
 const Stat = ({ label, value, hint }: { label: string; value: string; hint?: string }) => (
-  <Card className="glass-card">
+  <Card className="panel">
     <CardContent className="pt-6">
       <p className="text-xs uppercase tracking-wide text-muted-foreground">{label}</p>
-      <p className="mt-1 text-3xl font-bold text-cosmic-purple">{value}</p>
+      <p className="mt-1 text-3xl font-bold text-accent">{value}</p>
       {hint && <p className="mt-1 text-xs text-muted-foreground">{hint}</p>}
     </CardContent>
   </Card>
@@ -127,7 +127,7 @@ const ModelDashboard = () => {
           report an interval narrower than the data supports.
         </p>
 
-        <Card className="glass-card">
+        <Card className="panel">
           <CardHeader>
             <CardTitle>Leakage ablation</CardTitle>
             <CardDescription>
@@ -140,7 +140,7 @@ const ModelDashboard = () => {
           </CardContent>
         </Card>
 
-        <Card className="glass-card">
+        <Card className="panel">
           <CardHeader>
             <CardTitle>Task framing</CardTitle>
             <CardDescription>
@@ -154,7 +154,7 @@ const ModelDashboard = () => {
         </Card>
 
         <div className="grid gap-6 lg:grid-cols-2">
-          <Card className="glass-card">
+          <Card className="panel">
             <CardHeader>
               <CardTitle>Calibration</CardTitle>
               <CardDescription>
@@ -177,27 +177,27 @@ const ModelDashboard = () => {
             <CardContent>
               <ResponsiveContainer width="100%" height={260}>
                 <LineChart data={reliability}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(240 15% 20%)" />
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                   <XAxis dataKey="predicted" tick={{ fontSize: 11 }} />
                   <YAxis domain={[0, 1]} tick={{ fontSize: 11 }} />
                   <Tooltip
                     contentStyle={{
-                      background: "hsl(240 18% 10%)",
-                      border: "1px solid hsl(240 15% 20%)",
+                      background: "hsl(var(--card))",
+                      border: "1px solid hsl(var(--border))",
                       borderRadius: 8,
                     }}
                   />
                   <Line
                     type="monotone"
                     dataKey="ideal"
-                    stroke="hsl(215 20% 45%)"
+                    stroke="hsl(var(--muted-foreground))"
                     strokeDasharray="4 4"
                     dot={false}
                   />
                   <Line
                     type="monotone"
                     dataKey="observed"
-                    stroke="hsl(265 85% 65%)"
+                    stroke="hsl(var(--accent))"
                     strokeWidth={2}
                   />
                 </LineChart>
@@ -205,7 +205,7 @@ const ModelDashboard = () => {
             </CardContent>
           </Card>
 
-          <Card className="glass-card">
+          <Card className="panel">
             <CardHeader>
               <CardTitle>Feature importance</CardTitle>
               <CardDescription>Mean absolute SHAP value across the test set.</CardDescription>
@@ -222,19 +222,19 @@ const ModelDashboard = () => {
                   />
                   <Tooltip
                     contentStyle={{
-                      background: "hsl(240 18% 10%)",
-                      border: "1px solid hsl(240 15% 20%)",
+                      background: "hsl(var(--card))",
+                      border: "1px solid hsl(var(--border))",
                       borderRadius: 8,
                     }}
                   />
-                  <Bar dataKey="value" fill="hsl(265 85% 65%)" radius={3} />
+                  <Bar dataKey="value" fill="hsl(var(--accent))" radius={3} />
                 </BarChart>
               </ResponsiveContainer>
             </CardContent>
           </Card>
         </div>
 
-        <Card className="glass-card">
+        <Card className="panel">
           <CardHeader>
             <CardTitle>Cross-mission generalisation</CardTitle>
             <CardDescription>
@@ -257,7 +257,7 @@ const ModelDashboard = () => {
             </div>
             <div>
               <p className="text-xs uppercase text-muted-foreground">ROC-AUC drop</p>
-              <p className="text-2xl font-bold text-amber-300">
+              <p className="figure text-2xl font-bold text-accent">
                 {data.transfer.roc_auc_drop.toFixed(4)}
               </p>
               <p className="text-xs text-muted-foreground">domain shift</p>
@@ -265,7 +265,7 @@ const ModelDashboard = () => {
           </CardContent>
         </Card>
 
-        <Card className="glass-card">
+        <Card className="panel">
           <CardHeader>
             <CardTitle>Model ladder</CardTitle>
             <CardDescription>
