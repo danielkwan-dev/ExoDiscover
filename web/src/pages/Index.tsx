@@ -150,6 +150,9 @@ const Index = () => {
       </section>
 
       <nav className="mt-12 flex flex-wrap gap-x-8 gap-y-2 border-t border-border pt-6 text-sm">
+        <Link className="underline underline-offset-4 hover:text-accent" to="/map">
+          The survey in 3D
+        </Link>
         <Link className="underline underline-offset-4 hover:text-accent" to="/predict">
           Classify a signal
         </Link>
