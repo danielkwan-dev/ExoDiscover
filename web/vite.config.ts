@@ -12,11 +12,10 @@ export default defineConfig({
   build: {
     rollupOptions: {
       output: {
-        // Recharts pulls in d3 and dominates the bundle. Splitting it out lets
-        // the three pages that do not chart anything skip downloading it.
+        // There is one screen now, so nothing to split by route. React is kept
+        // separate only because it changes far less often than the app does.
         manualChunks: {
-          charts: ["recharts"],
-          react: ["react", "react-dom", "react-router-dom"],
+          react: ["react", "react-dom"],
         },
       },
     },

@@ -13,8 +13,10 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import joblib
+import numpy as np
 import pandas as pd
 import typer
+from sklearn.ensemble import HistGradientBoostingClassifier
 
 from exodiscover import skymap
 from exodiscover.config import settings
@@ -30,7 +32,7 @@ from exodiscover.evaluate import (
     write_metrics,
 )
 from exodiscover.experiments import ablation, overfit, transfer
-from exodiscover.explain import global_importance
+from exodiscover.explain import global_importance, shap_matrix
 from exodiscover.features.tabular import FEATURE_COLUMNS, add_multiplicity, build_features
 from exodiscover.models import train as train_mod
 from exodiscover.models.registry import TUNABLE
@@ -216,32 +218,54 @@ def train_cmd(
     typer.echo(f"wrote {ranked_path} ({len(ranked)} candidates)")
 
 
+#: How many SHAP terms the detail panel shows for a selected planet.
+REASONS_SHOWN = 3
+
+
 @app.command("skymap")
 def skymap_cmd() -> None:
-    """Join positions to distances and write the sky map the web view reads."""
-    bundle = joblib.load(settings.models_dir / "model.joblib")
-    features = list(bundle["features"])
-
+    """Place both catalogs in space and write the sky map the web view reads."""
     koi = ingest.load_cached("koi")
     stellar = ingest.load_cached("stellar")
+    toi = ingest.load_cached("toi")
+
+    # One model for both missions. The shipped 17-feature model cannot score
+    # TESS -- only 11 features exist in both catalogs -- and scoring the two
+    # with different models would make their probabilities incomparable, which
+    # is the one thing this view puts side by side.
+    shared = transfer.SHARED_FEATURES
+    resolved = koi[koi["koi_disposition"].isin(["CONFIRMED", "FALSE POSITIVE"])]
+    resolved = add_multiplicity(resolved).reset_index(drop=True)
+    X_fit = build_features(resolved)[shared]
+    y_fit = (resolved["koi_disposition"] == "CONFIRMED").astype(int)
+    model = HistGradientBoostingClassifier(random_state=settings.random_seed)
+    model.fit(X_fit, y_fit)
+    typer.echo(f"scoring both missions with a {len(shared)}-feature shared model")
 
     def score(X: pd.DataFrame):
-        return bundle["model"].predict_proba(X[features])[:, 1]
+        return model.predict_proba(X[shared])[:, 1]
 
-    table = skymap.build_skymap(koi, stellar, score)
-    dropped = len(koi) - len(table)
+    def reasons(X: pd.DataFrame) -> list[str]:
+        """Top contributions per row, precomputed so a click costs nothing."""
+        values = shap_matrix(model, X[shared])
+        order = np.argsort(-np.abs(values), axis=1)[:, :REASONS_SHOWN]
+        return [
+            ";".join(f"{shared[j]}:{values[i, j]:+.2f}" for j in row)
+            for i, row in enumerate(order)
+        ]
+
+    table = skymap.build_skymap(koi, stellar, toi, score, reasons)
 
     settings.metrics_dir.mkdir(parents=True, exist_ok=True)
     path = settings.metrics_dir / "sky_map.csv"
     table.to_csv(path, index=False)
 
-    near, far = table["dist_pc"].min(), table["dist_pc"].max()
+    ly = table["dist_pc"] * skymap.LY_PER_PARSEC
+    by_mission = table["mission"].value_counts().to_dict()
+    typer.echo(f"wrote {path} ({len(table)} objects: {by_mission})")
     typer.echo(
-        f"wrote {path} ({len(table)} objects, {dropped} without a usable distance)"
-    )
-    typer.echo(
-        f"  nearest {near * skymap.LY_PER_PARSEC:,.0f} ly, "
-        f"farthest {far * skymap.LY_PER_PARSEC:,.0f} ly"
+        f"  nearest {ly.min():,.0f} ly, median {ly.median():,.0f} ly, "
+        f"farthest {ly.max():,.0f} ly"
     )
 
 

@@ -19,27 +19,24 @@ ROC-AUC 0.838 · Brier 0.177 · n = 2,562 resolved TESS objects
 
 ---
 
-![Overview](docs/screenshots/overview.png)
+The app is one scene you are inside: 16,932 catalogued objects at their real
+right ascension, declination and distance, with Earth at the origin. Drag to
+look, scroll to travel, click a planet.
 
-Every catalogued object placed in real space, Earth at the origin — filterable by
-distance, disposition and the model's own probability. The cone is the actual
-survey: Kepler stared at one 22°×16° window, so the objects form a narrow beam
-punched thousands of light years deep rather than a sphere of neighbours.
+Both missions are drawn together because that pairing is the point. **Kepler**
+stared at a single 22°×16° window, so its 9,444 objects form a dense beam in one
+direction. **TESS** surveyed the whole sky, so its 7,488 are in every direction
+and the nearest is 21 light years away. Standing at Earth you really are
+surrounded — by TESS. Kepler alone would make that a lie.
 
-![Sky map](docs/screenshots/skymap.png)
+![The scene](docs/screenshots/space.png)
 
-Classify a single transit signal and see the SHAP contributions behind the
-probability:
+Clicking a planet is the model demo: its prediction, the archive's verdict to
+compare against, and the SHAP terms that drove the score. Both missions are
+scored by the same 11-feature model — the only features the two catalogues
+share — so the numbers are comparable.
 
-![Classify](docs/screenshots/predict.png)
-
-The 1,979 unvetted Kepler candidates, ranked — none of them seen in training:
-
-![Candidate shortlist](docs/screenshots/discoveries.png)
-
-Ablations, calibration and the model ladder, all read live from the API:
-
-![Model performance](docs/screenshots/model.png)
+![A selected planet](docs/screenshots/space-detail.png)
 
 ---
 

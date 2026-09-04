@@ -1,15 +1,15 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Route, Routes } from "react-router-dom";
 
-import Nav from "./components/Nav";
-import { Toaster } from "./components/ui/sonner";
-import { TooltipProvider } from "./components/ui/tooltip";
-import Discoveries from "./pages/Discoveries";
-import Index from "./pages/Index";
-import ModelDashboard from "./pages/ModelDashboard";
-import NotFound from "./pages/NotFound";
-import Predict from "./pages/Predict";
-import SkyMap from "./pages/SkyMap";
+import Space from "./pages/Space";
+
+/**
+ * One scene, no routes.
+ *
+ * The app used to be five pages of prose, forms and tables. It is now a place:
+ * you are inside the catalogue, and the model's opinion of any object appears
+ * when you click it. The analysis those pages carried lives in README.md,
+ * docs/LEAKAGE.md and docs/MODEL_CARD.md, where it can be read properly.
+ */
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false } },
@@ -17,22 +17,7 @@ const queryClient = new QueryClient({
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <Toaster />
-      <BrowserRouter>
-        <Nav />
-        <main>
-          <Routes>
-            <Route path="/" element={<Index />} />
-            <Route path="/predict" element={<Predict />} />
-            <Route path="/map" element={<SkyMap />} />
-            <Route path="/discoveries" element={<Discoveries />} />
-            <Route path="/model" element={<ModelDashboard />} />
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </main>
-      </BrowserRouter>
-    </TooltipProvider>
+    <Space />
   </QueryClientProvider>
 );
 

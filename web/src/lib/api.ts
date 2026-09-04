@@ -123,21 +123,24 @@ export interface Candidate {
   top_reasons: string;
 }
 
-/** One catalogue object placed in space, Earth at the origin. */
+/** One catalogued object placed in space, Earth at the origin. */
 export interface SkyObject {
-  kepoi_name: string;
-  kepler_name: string | null;
-  kepid: number;
+  name: string;
+  /** "Kepler" or "TESS". Kepler stared at one patch; TESS covered the sky. */
+  mission: string;
+  star_id: number | null;
   ra: number;
   dec: number;
-  /** Parsecs, joined from the Kepler stellar table. */
+  /** Parsecs. Kepler's is joined from the stellar table, TESS carries its own. */
   dist_pc: number;
-  /** Symmetric uncertainty on that distance; typically about 19%. */
-  dist_err_pc: number | null;
+  /** CONFIRMED / CANDIDATE / FALSE POSITIVE, normalised across both archives. */
   disposition: string;
+  /** From the 11-feature model that can score both missions comparably. */
   probability: number;
-  koi_prad: number | null;
-  koi_period: number | null;
+  radius_earth: number | null;
+  period_days: number | null;
+  /** Precomputed SHAP terms, "feature:+1.82;feature:-0.63", so a click is free. */
+  top_reasons: string;
 }
 
 export class ApiError extends Error {
