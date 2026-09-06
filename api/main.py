@@ -101,6 +101,26 @@ def discoveries(limit: int = 25) -> dict:
     return {"n": len(df), "candidates": df.to_dict(orient="records")}
 
 
+@app.get("/skymap", tags=["predict"])
+def sky_map() -> dict:
+    """Every KOI that can actually be placed in space, with Earth at the origin.
+
+    Returned whole rather than filtered server-side: it is roughly 9,400 rows,
+    small enough that the view filters instantly in the browser.
+    """
+    path = settings.metrics_dir / "sky_map.csv"
+    if not path.exists():
+        raise HTTPException(
+            status_code=503,
+            detail="No sky map available. Run `exo ingest` then `exo skymap`.",
+        )
+    df = pd.read_csv(path)
+    return {
+        "n": int(len(df)),
+        "objects": df.where(pd.notna(df), None).to_dict(orient="records"),
+    }
+
+
 @app.post("/predict", response_model=Prediction, tags=["predict"])
 def predict(payload: KOIInput) -> dict:
     _require_model()

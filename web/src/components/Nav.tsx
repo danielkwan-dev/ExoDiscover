@@ -3,6 +3,7 @@ import { Telescope } from "lucide-react";
 
 const links = [
   { to: "/", label: "Overview", end: true },
+  { to: "/map", label: "Sky map" },
   { to: "/predict", label: "Classify" },
   { to: "/discoveries", label: "Discoveries" },
   { to: "/model", label: "Model" },

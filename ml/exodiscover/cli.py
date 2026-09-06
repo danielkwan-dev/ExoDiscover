@@ -16,6 +16,7 @@ import joblib
 import pandas as pd
 import typer
 
+from exodiscover import skymap
 from exodiscover.config import settings
 from exodiscover.data import ingest
 from exodiscover.data.schema import assert_no_derived_leakage
@@ -213,6 +214,35 @@ def train_cmd(
     ranked_path = settings.metrics_dir / "top_candidates.csv"
     ranked.to_csv(ranked_path, index=False)
     typer.echo(f"wrote {ranked_path} ({len(ranked)} candidates)")
+
+
+@app.command("skymap")
+def skymap_cmd() -> None:
+    """Join positions to distances and write the sky map the web view reads."""
+    bundle = joblib.load(settings.models_dir / "model.joblib")
+    features = list(bundle["features"])
+
+    koi = ingest.load_cached("koi")
+    stellar = ingest.load_cached("stellar")
+
+    def score(X: pd.DataFrame):
+        return bundle["model"].predict_proba(X[features])[:, 1]
+
+    table = skymap.build_skymap(koi, stellar, score)
+    dropped = len(koi) - len(table)
+
+    settings.metrics_dir.mkdir(parents=True, exist_ok=True)
+    path = settings.metrics_dir / "sky_map.csv"
+    table.to_csv(path, index=False)
+
+    near, far = table["dist_pc"].min(), table["dist_pc"].max()
+    typer.echo(
+        f"wrote {path} ({len(table)} objects, {dropped} without a usable distance)"
+    )
+    typer.echo(
+        f"  nearest {near * skymap.LY_PER_PARSEC:,.0f} ly, "
+        f"farthest {far * skymap.LY_PER_PARSEC:,.0f} ly"
+    )
 
 
 @app.command("eval")

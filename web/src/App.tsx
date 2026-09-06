@@ -9,6 +9,7 @@ import Index from "./pages/Index";
 import ModelDashboard from "./pages/ModelDashboard";
 import NotFound from "./pages/NotFound";
 import Predict from "./pages/Predict";
+import SkyMap from "./pages/SkyMap";
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false } },
@@ -24,6 +25,7 @@ const App = () => (
           <Routes>
             <Route path="/" element={<Index />} />
             <Route path="/predict" element={<Predict />} />
+            <Route path="/map" element={<SkyMap />} />
             <Route path="/discoveries" element={<Discoveries />} />
             <Route path="/model" element={<ModelDashboard />} />
             <Route path="*" element={<NotFound />} />

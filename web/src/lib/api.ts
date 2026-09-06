@@ -123,6 +123,23 @@ export interface Candidate {
   top_reasons: string;
 }
 
+/** One catalogue object placed in space, Earth at the origin. */
+export interface SkyObject {
+  kepoi_name: string;
+  kepler_name: string | null;
+  kepid: number;
+  ra: number;
+  dec: number;
+  /** Parsecs, joined from the Kepler stellar table. */
+  dist_pc: number;
+  /** Symmetric uncertainty on that distance; typically about 19%. */
+  dist_err_pc: number | null;
+  disposition: string;
+  probability: number;
+  koi_prad: number | null;
+  koi_period: number | null;
+}
+
 export class ApiError extends Error {
   constructor(
     message: string,
@@ -169,6 +186,8 @@ export const api = {
 
   discoveries: (limit = 25) =>
     request<{ n: number; candidates: Candidate[] }>(`/discoveries?limit=${limit}`),
+
+  skymap: () => request<{ n: number; objects: SkyObject[] }>("/skymap"),
 
   predictBatch: (file: File) => {
     const form = new FormData();

@@ -21,6 +21,13 @@ ROC-AUC 0.838 · Brier 0.177 · n = 2,562 resolved TESS objects
 
 ![Overview](docs/screenshots/overview.png)
 
+Every catalogued object placed in real space, Earth at the origin — filterable by
+distance, disposition and the model's own probability. The cone is the actual
+survey: Kepler stared at one 22°×16° window, so the objects form a narrow beam
+punched thousands of light years deep rather than a sphere of neighbours.
+
+![Sky map](docs/screenshots/skymap.png)
+
 Classify a single transit signal and see the SHAP contributions behind the
 probability:
 
